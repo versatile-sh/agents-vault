@@ -1,13 +1,8 @@
-use std::io::{BufRead, BufReader, Write};
-use std::process::Stdio;
-use std::sync::mpsc;
-use std::time::Duration;
-
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use crate::launch::harness_command;
+use crate::codex;
 use crate::model::{Account, Harness};
 use crate::store::{now, read_json, write_json, Store};
 
@@ -113,58 +108,8 @@ fn parse_codex(result: &Value) -> Limits {
 
 /// Asks the Codex CLI itself for the account limits and caches the answer.
 pub fn probe_codex(store: &Store, account: &Account) -> Result<Limits> {
-    let mut command = harness_command(store, account)?;
-    command
-        .args(["-s", "read-only", "-a", "never", "app-server"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let mut child = command.spawn().context("could not start codex")?;
-    let mut stdin = child.stdin.take().context("missing stdin pipe")?;
-    let stdout = child.stdout.take().context("missing stdout pipe")?;
-    let (sender, receiver) = mpsc::channel::<Value>();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(|line| line.ok()) {
-            if let Ok(message) = serde_json::from_str(&line) {
-                if sender.send(message).is_err() {
-                    break;
-                }
-            }
-        }
-    });
-    let mut request = |message: Value, id: Option<i64>, seconds: u64| -> Result<Value> {
-        writeln!(stdin, "{message}")?;
-        stdin.flush()?;
-        let Some(id) = id else { return Ok(Value::Null) };
-        loop {
-            let reply = receiver
-                .recv_timeout(Duration::from_secs(seconds))
-                .context("codex did not answer in time")?;
-            if reply.get("id").and_then(Value::as_i64) == Some(id) {
-                if let Some(error) = reply.get("error") {
-                    bail!("codex refused the request: {error}");
-                }
-                return Ok(reply.get("result").cloned().unwrap_or(Value::Null));
-            }
-        }
-    };
-    let info = json!({ "clientInfo": { "name": "vvault", "version": env!("CARGO_PKG_VERSION") } });
-    let outcome = request(
-        json!({ "id": 1, "method": "initialize", "params": info }),
-        Some(1),
-        10,
-    )
-    .and_then(|_| request(json!({ "method": "initialized", "params": {} }), None, 0))
-    .and_then(|_| {
-        request(
-            json!({ "id": 2, "method": "account/rateLimits/read" }),
-            Some(2),
-            15,
-        )
-    });
-    let _ = child.kill();
-    let _ = child.wait();
-    let limits = parse_codex(&outcome?);
+    let result = codex::request(store, account, "account/rateLimits/read", Value::Null)?;
+    let limits = parse_codex(&result);
     if limits.session.is_none() && limits.weekly.is_none() {
         bail!("codex returned no rate limits for this account");
     }
@@ -190,6 +135,7 @@ pub fn current(store: &Store, account: &Account, max_age: i64) -> Option<Limits>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     const ID: &str = "0b0e7a52-5d0c-4b62-9d43-0d2f6a0f5a11";
 
