@@ -5,7 +5,9 @@ pub mod kit;
 pub mod launch;
 pub mod limits;
 pub mod model;
+pub mod proc;
 pub mod secrets;
+pub mod status;
 pub mod store;
 
 pub use anyhow::Result;
