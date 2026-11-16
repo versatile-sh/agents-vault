@@ -17,6 +17,7 @@
     <nav class="nav" role="tablist" aria-label="Sections">
       <button type="button" role="tab" data-tab="claude" aria-selected="true"><span>Claude Code</span><span class="count"></span></button>
       <button type="button" role="tab" data-tab="codex" aria-selected="false"><span>Codex</span><span class="count"></span></button>
+      <button type="button" role="tab" data-tab="grok" aria-selected="false"><span>Grok</span><span class="count"></span></button>
       <button type="button" role="tab" data-tab="keys" aria-selected="false"><span>API keys</span><span class="count"></span></button>
     </nav>
     <button type="button" id="open-settings" class="side-link" aria-label="Settings">
@@ -64,10 +65,10 @@
       </fieldset>
       <label class="field"><span class="label">Name</span><input name="label" required maxlength="80" autocomplete="off" placeholder="Work, Personal…"></label>
       <label class="field" data-mode="key" hidden><span class="label">API key</span><input name="key" type="password" autocomplete="off" spellcheck="false"></label>
-      <label class="field" data-mode="key" hidden><span class="label">Endpoint <small>optional</small></span><input name="base_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
-      <label class="check" data-mode="key" hidden><input name="bearer" type="checkbox">Send the key as a bearer token</label>
+      <label class="field" data-mode="key" data-skip="grok" hidden><span class="label">Endpoint <small>optional</small></span><input name="base_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
+      <label class="check" data-mode="key" data-skip="grok" hidden><input name="bearer" type="checkbox">Send the key as a bearer token</label>
       <div class="field" data-picker data-mode="login key"><span class="label">Model <small data-picker-note></small></span><select name="model_choice" aria-label="Model"></select><input name="model" class="mono" autocomplete="off" spellcheck="false" placeholder="model id" aria-label="Model id" hidden></div>
-      <label class="field" data-mode="key" hidden><span class="label">Fast model <small>optional</small></span><input name="fast_model" class="mono" autocomplete="off" spellcheck="false" placeholder="for background tasks"></label>
+      <label class="field" data-mode="key" data-skip="grok codex" hidden><span class="label">Fast model <small>optional</small></span><input name="fast_model" class="mono" autocomplete="off" spellcheck="false" placeholder="for background tasks"></label>
       <label class="field" data-mode="adopt" hidden><span class="label">Folder <small>optional</small></span><input name="dir" class="mono" autocomplete="off" spellcheck="false" placeholder="the default home when empty"></label>
       <p class="error" role="alert"></p>
     </div>
@@ -152,6 +153,7 @@
       <p class="lede">Shared instructions are linked into every managed account: CLAUDE.md or AGENTS.md, skills, commands and agents.</p>
       <label class="field"><span class="label">Claude Code instructions folder</span><input name="claude_kit" class="mono" autocomplete="off" spellcheck="false" placeholder="/home/you/.claude"></label>
       <label class="field"><span class="label">Codex instructions folder</span><input name="codex_kit" class="mono" autocomplete="off" spellcheck="false" placeholder="/home/you/.codex"></label>
+      <label class="field"><span class="label">Grok instructions folder</span><input name="grok_kit" class="mono" autocomplete="off" spellcheck="false" placeholder="/home/you/.grok"></label>
       <label class="field"><span class="label">Terminal command <small>detected when empty</small></span><input name="terminal" class="mono" autocomplete="off" spellcheck="false" placeholder="kitty -e"></label>
       <p class="error" role="alert"></p>
     </div>

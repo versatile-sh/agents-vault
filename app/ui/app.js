@@ -14,10 +14,13 @@ const CUSTOM = "__custom";
 const TABS = {
   claude: { name: "Claude Code", unit: "account", add: "Add account", title: "No Claude Code accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
   codex: { name: "Codex", unit: "account", add: "Add account", title: "No Codex accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
+  grok: { name: "Grok", unit: "account", add: "Add account", title: "No Grok accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
   keys: { name: "API keys", unit: "key", add: "Add API key", title: "No API keys yet", text: "Keep one key per provider or router and open it in Claude Code, Codex or any other tool." },
 };
 const MORE_ICON = "M5 12h.01M12 12h.01M19 12h.01";
-const TOOL_NAMES = { claude: "Claude Code", codex: "Codex" };
+const TOOL_NAMES = { claude: "Claude Code", codex: "Codex", grok: "Grok" };
+const BADGES = { claude: "CC", codex: "CX", grok: "GK" };
+const MODEL_SOURCES = { claude: "Claude Code models", codex: "from your Codex account", grok: "from the Grok CLI" };
 
 let tab = "claude";
 let rows = [];
@@ -161,7 +164,7 @@ function accountRow(row) {
   const info = subtitle(row);
   const launch = () => act(() => invoke("open_account", { id: row.id }), `Opened ${row.label}`);
   const open = element("button", { type: "button", class: "open", title: `Open ${row.label} in a terminal` }, [
-    element("span", { class: "badge", text: row.harness === "claude" ? "CC" : "CX" }),
+    element("span", { class: "badge", text: BADGES[row.harness] }),
     element("span", { class: "who" }, [
       element("strong", { text: row.label }),
       element("span", { text: info.text, class: info.alert ? "alert" : "" }),
@@ -212,7 +215,7 @@ function providerRow(provider) {
 
 function render() {
   const visible = rows.filter((row) => row.harness === tab);
-  const counts = { claude: 0, codex: 0, keys: providers.length };
+  const counts = { claude: 0, codex: 0, grok: 0, keys: providers.length };
   for (const row of rows) counts[row.harness] += 1;
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.setAttribute("aria-selected", String(button.dataset.tab === tab));
@@ -277,16 +280,17 @@ function showMode() {
   const form = byId("add-form");
   const mode = form.elements.mode.value;
   for (const node of form.querySelectorAll("[data-mode]")) {
-    node.hidden = !node.dataset.mode.split(" ").includes(mode);
+    node.hidden = !node.dataset.mode.split(" ").includes(mode) || (node.dataset.skip ?? "").split(" ").includes(tab);
   }
   form.elements.key.required = mode === "key";
-  if (mode === "login") loadModels(form, () => invoke("harness_models", { harness: tab }), null, tab === "codex" ? "from your Codex account" : "Claude Code models");
-  if (mode === "key") setModels(form, [], modelOf(form), "type the key to list them");
+  if (mode === "login") loadModels(form, () => invoke("harness_models", { harness: tab }), null, MODEL_SOURCES[tab]);
+  if (mode === "key" && tab === "grok") loadModels(form, () => invoke("harness_models", { harness: tab }), null, MODEL_SOURCES[tab]);
+  if (mode === "key" && tab !== "grok") setModels(form, [], modelOf(form), "type the key to list them");
 }
 
 function loadKeyModels() {
   const form = byId("add-form");
-  if (form.elements.mode.value !== "key" || !form.elements.key.value) return;
+  if (form.elements.mode.value !== "key" || !form.elements.key.value || tab === "grok") return;
   const request = { harness: tab, baseUrl: form.elements.base_url.value.trim() || null, bearer: form.elements.bearer.checked, key: form.elements.key.value };
   loadModels(form, () => invoke("key_models", request), modelOf(form), "from the endpoint");
 }
@@ -538,6 +542,7 @@ byId("open-settings").addEventListener("click", async () => {
     const current = await invoke("settings");
     form.elements.claude_kit.value = current.claude_kit ?? "";
     form.elements.codex_kit.value = current.codex_kit ?? "";
+    form.elements.grok_kit.value = current.grok_kit ?? "";
     form.elements.terminal.value = current.terminal.join(" ");
     form.querySelector(".error").textContent = "";
     dialogs.settings.showModal();
@@ -553,6 +558,7 @@ byId("settings-form").addEventListener("submit", (event) => {
   const settings = {
     claude_kit: form.elements.claude_kit.value.trim() || null,
     codex_kit: form.elements.codex_kit.value.trim() || null,
+    grok_kit: form.elements.grok_kit.value.trim() || null,
     terminal: form.elements.terminal.value.trim().split(/\s+/).filter(Boolean),
   };
   submit(dialogs.settings, () => invoke("save_settings", { settings }), "Settings saved");
