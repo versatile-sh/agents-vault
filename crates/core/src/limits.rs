@@ -2,11 +2,13 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::claude;
 use crate::codex;
 use crate::model::{Account, Harness};
 use crate::store::{now, read_json, write_json, Store};
 
 const WEEK_MINUTES: i64 = 10_080;
+const MIN_PROBE_GAP: i64 = 15;
 
 /// Usage of one rate-limit window, as a 0–100 percentage.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -117,19 +119,28 @@ pub fn probe_codex(store: &Store, account: &Account) -> Result<Limits> {
     Ok(limits)
 }
 
-/// Best known limits: cached when fresh enough, otherwise probed where possible.
+/// Asks Anthropic for the limits of a Claude Code account, using the token Claude Code saved.
+pub fn probe_claude(store: &Store, account: &Account) -> Result<Limits> {
+    let token = claude::fresh_token(store, account)?;
+    let limits = claude::usage(&token.access)?;
+    save(store, &account.id, &limits)?;
+    Ok(limits)
+}
+
+/// Best known limits: cached when fresh enough, otherwise asked from the provider.
 pub fn current(store: &Store, account: &Account, max_age: i64) -> Option<Limits> {
     if !account.is_login() {
         return None;
     }
     let cached = read(store, &account.id);
-    if account.harness != Harness::Codex {
+    if cached.as_ref().is_some_and(|limits| now() - limits.captured_at < max_age.max(MIN_PROBE_GAP)) {
         return cached;
     }
-    match &cached {
-        Some(limits) if now() - limits.captured_at < max_age => cached,
-        _ => probe_codex(store, account).ok().or(cached),
-    }
+    let probed = match account.harness {
+        Harness::Claude => probe_claude(store, account),
+        Harness::Codex => probe_codex(store, account),
+    };
+    probed.ok().or(cached)
 }
 
 #[cfg(test)]

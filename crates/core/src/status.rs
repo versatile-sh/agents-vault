@@ -5,6 +5,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::claude;
 use crate::launch::harness_command;
 use crate::limits;
 use crate::model::{Account, Config, Harness};
@@ -36,9 +37,14 @@ fn parse_claude(stdout: &str) -> Status {
     Status {
         logged_in: json.get("loggedIn").and_then(Value::as_bool) == Some(true),
         email: text("email"),
-        plan: text("subscriptionType"),
+        plan: text("planTier").map(|tier| claude::tier_label(&tier)).or_else(|| text("subscriptionType")),
         checked_at: now(),
     }
+}
+
+fn claude_plan(store: &Store, account: &Account) -> Option<String> {
+    let token = claude::token(&store.home(account))?;
+    claude::plan(&token.access).ok().flatten()
 }
 
 /// Asks the harness CLI for the session state; the CLI renews its own token.
@@ -47,7 +53,11 @@ pub fn check(store: &Store, account: &Account) -> Result<Status> {
     let status = match account.harness {
         Harness::Claude => {
             command.args(["auth", "status"]);
-            parse_claude(&proc::run(command, Duration::from_secs(120))?.stdout)
+            let mut status = parse_claude(&proc::run(command, Duration::from_secs(120))?.stdout);
+            if status.logged_in {
+                status.plan = claude_plan(store, account).or(status.plan);
+            }
+            status
         }
         Harness::Codex => {
             command.args(["login", "status"]);
@@ -132,6 +142,8 @@ mod tests {
         assert!(status.logged_in);
         assert_eq!(status.email.as_deref(), Some("a@b.c"));
         assert_eq!(status.plan.as_deref(), Some("max"));
+        let tiered = parse_claude("{\"loggedIn\":true,\"subscriptionType\":\"max\",\"planTier\":\"max_20x\"}");
+        assert_eq!(tiered.plan.as_deref(), Some("Max 20x"));
     }
 
     #[test]
