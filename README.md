@@ -50,6 +50,27 @@ vvault key router                     # replace a key in the keychain
 vvault remove work                    # the profile folder is kept unless --purge
 ```
 
+### One account for the whole machine
+
+"Use on this machine" in the app, or `vvault default`, makes plain `claude`, `codex` or `grok` use that account in every new terminal and app.
+
+```sh
+vvault default work            # plain `claude` now means the work account
+vvault default --clear claude  # back to the harness's own default home
+vvault default                 # show the current defaults
+```
+
+It works by pointing the harness at the account's home, so nothing is copied and there is still one copy of the session.
+
+| Where | What is written |
+| --- | --- |
+| `~/.bashrc`, `~/.zshrc`, `~/.config/fish/conf.d/vvault.fish` (only those that exist) | One marked block that runs `vvault env` when a shell starts |
+| Linux: `~/.config/environment.d/60-vvault.conf` | The variable for graphical apps, read at the next login |
+| macOS: `launchctl setenv` | The variable for apps started afterwards |
+| Windows: `setx` | The user variable for programs started afterwards |
+
+Terminals that are already open keep their account until you run `eval "$(vvault env)"` or reopen them. Only signed-in accounts can be the default, because an API key would have to sit in every shell.
+
 ### API keys for other providers
 
 A provider key is stored once and opened in whatever tool you use. Presets fill the endpoints for OpenRouter and DeepSeek; any compatible endpoint works with `--anthropic-url` and `--openai-url`.

@@ -14,7 +14,9 @@ use vvault_core::limits::Window;
 use vvault_core::login::{self, Session};
 use vvault_core::model::{presets, Preset};
 use vvault_core::models::{self, ModelOption};
-use vvault_core::{limits, secrets, status, terminal, Auth, Harness, Kit, Provider, Store, Tool};
+use vvault_core::{
+    limits, machine, secrets, status, terminal, Auth, Harness, Kit, Provider, Store, Tool,
+};
 
 const TRAY_ID: &str = "vvault";
 const REFRESH: Duration = Duration::from_secs(60);
@@ -190,6 +192,18 @@ fn login_cancel(logins: State<Logins>, id: String) -> Reply<()> {
     if let Ok(mut sessions) = logins.0.lock() {
         sessions.remove(&id);
     }
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn set_default(app: AppHandle, store: State<Store>, id: String, on: bool) -> Reply<()> {
+    if on {
+        machine::set_default(&store, &id).map_err(fail)?;
+    } else {
+        let config = store.load().map_err(fail)?;
+        machine::clear_default(&store, config.find(&id).map_err(fail)?.harness).map_err(fail)?;
+    }
+    refresh_tray(&app);
     Ok(())
 }
 
@@ -589,6 +603,7 @@ fn main() {
             login_reopen,
             login_cancel,
             account_models,
+            set_default,
             harness_models,
             key_models,
             provider_models,
