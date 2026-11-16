@@ -243,6 +243,7 @@ function openAdd() {
   byId("add-title").textContent = `Add a ${TOOL_NAMES[tab]} account`;
   form.querySelector(".error").textContent = "";
   dialogs.add.showModal();
+  form.elements.label.focus();
 }
 
 function edit(row) {
@@ -257,6 +258,7 @@ function edit(row) {
   form.elements.kit.checked = row.kit;
   form.querySelector(".error").textContent = "";
   dialogs.edit.showModal();
+  form.elements.label.focus();
 }
 
 function fillProvider(values) {
@@ -285,6 +287,7 @@ function editProvider(provider) {
   }
   form.querySelector(".error").textContent = "";
   dialogs.provider.showModal();
+  form.elements[provider ? "label" : "key"].focus();
 }
 
 function disarm(button) {
@@ -402,6 +405,7 @@ byId("open-settings").addEventListener("click", async () => {
     form.elements.terminal.value = current.terminal.join(" ");
     form.querySelector(".error").textContent = "";
     dialogs.settings.showModal();
+    form.elements.claude_kit.focus();
   } catch (error) {
     say(String(error), true);
   }
