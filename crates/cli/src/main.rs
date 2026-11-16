@@ -4,19 +4,19 @@ use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use cofre_core::ledger::{self, clearable, NewAccount, Row};
-use cofre_core::limits::{self, Window};
-use cofre_core::model::presets;
-use cofre_core::status::{self, Pass};
-use cofre_core::store::now;
-use cofre_core::{
+use serde_json::{json, Value};
+use vvault_core::ledger::{self, clearable, NewAccount, Row};
+use vvault_core::limits::{self, Window};
+use vvault_core::model::presets;
+use vvault_core::status::{self, Pass};
+use vvault_core::store::now;
+use vvault_core::{
     kit, launch, secrets, terminal, Account, Auth, Config, Harness, Provider, Store, Tool,
 };
-use serde_json::{json, Value};
 
 #[derive(Parser)]
 #[command(
-    name = "cofre",
+    name = "vvault",
     version,
     about = "One ledger for every Claude Code and Codex account, key and router"
 )]
@@ -274,7 +274,7 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
         return Ok(());
     }
     if rows.is_empty() {
-        println!("No accounts yet. Try `cofre add work` or `cofre adopt personal`.");
+        println!("No accounts yet. Try `vvault add work` or `vvault adopt personal`.");
         return Ok(());
     }
     println!(
@@ -311,7 +311,7 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
 
 fn prepare(store: &Store, config: &Config, account: &Account) -> Result<()> {
     for warning in kit::apply(store, config, account)? {
-        eprintln!("cofre: {warning}");
+        eprintln!("vvault: {warning}");
     }
     Ok(())
 }
@@ -321,7 +321,7 @@ fn login(store: &Store, key: &str) -> Result<()> {
     let account = config.find(key)?;
     if !account.is_login() {
         bail!(
-            "`{}` uses an API key; update it with `cofre key`",
+            "`{}` uses an API key; update it with `vvault key`",
             account.label
         );
     }
@@ -406,7 +406,7 @@ fn provider(store: &Store, action: ProviderAction) -> Result<()> {
             entry.validate()?;
             let saved = ledger::create_provider(store, entry, &read_key(key_stdin)?)?;
             println!(
-                "Added {}. Start it with `cofre use {}`.",
+                "Added {}. Start it with `vvault use {}`.",
                 saved.label, saved.label
             );
         }
@@ -421,7 +421,7 @@ fn provider(store: &Store, action: ProviderAction) -> Result<()> {
             }
             if config.providers.is_empty() {
                 println!(
-                    "No providers yet. Try `cofre provider add OpenRouter --preset openrouter`."
+                    "No providers yet. Try `vvault provider add OpenRouter --preset openrouter`."
                 );
             }
             for entry in &config.providers {
@@ -634,7 +634,7 @@ fn dispatch(store: &Store, action: Action) -> Result<i32> {
                     },
                 )?;
                 println!(
-                    "Added {} ({}). Open it with `cofre open {}`.",
+                    "Added {} ({}). Open it with `vvault open {}`.",
                     account.label,
                     describe(&account),
                     account.label
@@ -653,7 +653,7 @@ fn dispatch(store: &Store, action: Action) -> Result<i32> {
                 )?;
                 if no_login {
                     println!(
-                        "Added {}. Sign in with `cofre login {}`.",
+                        "Added {}. Sign in with `vvault login {}`.",
                         account.label, account.label
                     );
                 } else {
@@ -812,7 +812,7 @@ fn main() -> ExitCode {
         Ok(code) => code,
         Err(_) if quiet => 0,
         Err(error) => {
-            eprintln!("cofre: {error:#}");
+            eprintln!("vvault: {error:#}");
             1
         }
     };

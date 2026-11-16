@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-const SERVICE: &str = "cofre";
+const SERVICE: &str = "vvault";
 
 fn entry(id: &str) -> Result<keyring::Entry> {
     uuid::Uuid::parse_str(id).context("invalid account id")?;

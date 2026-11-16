@@ -148,7 +148,7 @@ pub fn probe_codex(store: &Store, account: &Account) -> Result<Limits> {
             }
         }
     };
-    let info = json!({ "clientInfo": { "name": "cofre", "version": env!("CARGO_PKG_VERSION") } });
+    let info = json!({ "clientInfo": { "name": "vvault", "version": env!("CARGO_PKG_VERSION") } });
     let outcome = request(
         json!({ "id": 1, "method": "initialize", "params": info }),
         Some(1),

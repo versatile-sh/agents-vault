@@ -307,7 +307,7 @@ pub struct Preset {
     pub openai_url: Option<&'static str>,
 }
 
-/// Providers Cofre can fill in without the user typing endpoints.
+/// Providers Versatile Vault can fill in without the user typing endpoints.
 pub fn presets() -> Vec<Preset> {
     vec![
         Preset {

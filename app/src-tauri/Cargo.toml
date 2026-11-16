@@ -1,19 +1,19 @@
 [package]
-name = "cofre-app"
-description = "Tray app for the Cofre account ledger"
+name = "vvault-app"
+description = "Tray app for the Versatile Vault account ledger"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "cofre-app"
+name = "vvault-app"
 path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-cofre-core = { path = "../../crates/core" }
+vvault-core = { path = "../../crates/core" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

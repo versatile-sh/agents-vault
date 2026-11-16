@@ -3,16 +3,16 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use cofre_core::ledger::{self, clearable, NewAccount, Row};
-use cofre_core::limits::Window;
-use cofre_core::model::{presets, Preset};
-use cofre_core::{secrets, status, terminal, Auth, Harness, Kit, Provider, Store, Tool};
 use serde::{Deserialize, Serialize};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use vvault_core::ledger::{self, clearable, NewAccount, Row};
+use vvault_core::limits::Window;
+use vvault_core::model::{presets, Preset};
+use vvault_core::{secrets, status, terminal, Auth, Harness, Kit, Provider, Store, Tool};
 
-const TRAY_ID: &str = "cofre";
+const TRAY_ID: &str = "vvault";
 const REFRESH: Duration = Duration::from_secs(60);
 const KEEPALIVE_EVERY: u32 = 10;
 
@@ -358,7 +358,10 @@ fn refresh_tray(app: &AppHandle) {
     if !keys.is_empty() {
         menu = menu.separator();
     }
-    let built = menu.text("show", "Open Cofre").text("quit", "Quit").build();
+    let built = menu
+        .text("show", "Open Versatile Vault")
+        .text("quit", "Quit")
+        .build();
     if let (Ok(menu), Some(tray)) = (built, app.tray_by_id(TRAY_ID)) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -398,7 +401,7 @@ fn main() {
     let store = match Store::open() {
         Ok(store) => store,
         Err(error) => {
-            eprintln!("cofre: {error:#}");
+            eprintln!("vvault: {error:#}");
             std::process::exit(1);
         }
     };
@@ -427,7 +430,7 @@ fn main() {
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(icon)
                 .icon_as_template(true)
-                .tooltip("Cofre")
+                .tooltip("Versatile Vault")
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => show(app),
@@ -452,5 +455,5 @@ fn main() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("failed to start Cofre");
+        .expect("failed to start Versatile Vault");
 }

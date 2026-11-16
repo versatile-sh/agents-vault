@@ -5,12 +5,16 @@ use anyhow::{bail, Context, Result};
 
 use crate::model::{Account, Provider, Tool};
 
-/// Path of the `cofre` CLI: `COFRE_CLI`, a sibling of this executable, or PATH.
+/// Path of the `vvault` CLI: `VVAULT_CLI`, a sibling of this executable, or PATH.
 pub fn cli_path() -> Result<PathBuf> {
-    if let Some(path) = std::env::var_os("COFRE_CLI").filter(|path| !path.is_empty()) {
+    if let Some(path) = std::env::var_os("VVAULT_CLI").filter(|path| !path.is_empty()) {
         return Ok(PathBuf::from(path));
     }
-    let name = if cfg!(windows) { "cofre.exe" } else { "cofre" };
+    let name = if cfg!(windows) {
+        "vvault.exe"
+    } else {
+        "vvault"
+    };
     let current = std::env::current_exe().context("could not locate this executable")?;
     if current.file_name().is_some_and(|file| file == name) {
         return Ok(current);
@@ -19,7 +23,7 @@ pub fn cli_path() -> Result<PathBuf> {
     if sibling.is_file() {
         return Ok(sibling);
     }
-    which::which("cofre").context("the `cofre` CLI was not found next to the app or on PATH")
+    which::which("vvault").context("the `vvault` CLI was not found next to the app or on PATH")
 }
 
 fn candidates(title: &str) -> Vec<(String, Vec<String>)> {
@@ -86,7 +90,7 @@ fn spawn(mut command: Command, directory: Option<&Path>) -> Result<()> {
         .context("could not open a terminal window")
 }
 
-/// Opens a terminal window running `cofre <arguments>`; secrets are resolved inside it.
+/// Opens a terminal window running `vvault <arguments>`; secrets are resolved inside it.
 pub fn open(
     arguments: &[String],
     title: &str,
@@ -112,7 +116,7 @@ pub fn open(
             return spawn(command, directory);
         }
     }
-    bail!("no terminal emulator found; set one with `cofre terminal <program> [args]`")
+    bail!("no terminal emulator found; set one with `vvault terminal <program> [args]`")
 }
 
 /// Opens a terminal window on an account, running or signing it in.
@@ -164,9 +168,9 @@ mod tests {
 
     #[test]
     fn apple_script_survives_quotes_in_the_cli_path() {
-        let script = apple_script(Path::new("/Apps/it's \"x\"/cofre"), &["run", "id"]);
+        let script = apple_script(Path::new("/Apps/it's \"x\"/vvault"), &["run", "id"]);
         assert!(
-            script.contains("do script \"'/Apps/it'\\\\''s \\\"x\\\"/cofre' 'run' 'id'; exit\"")
+            script.contains("do script \"'/Apps/it'\\\\''s \\\"x\\\"/vvault' 'run' 'id'; exit\"")
         );
     }
 }
