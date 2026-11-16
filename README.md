@@ -46,6 +46,29 @@ cofre key router                     # replace a key in the keychain
 cofre remove work                    # the profile folder is kept unless --purge
 ```
 
+### API keys for other providers
+
+A provider key is stored once and opened in whatever tool you use. Presets fill the endpoints for OpenRouter and DeepSeek; any compatible endpoint works with `--anthropic-url` and `--openai-url`.
+
+```sh
+cofre provider add OpenRouter --preset openrouter --model vendor/model-a --model vendor/model-b
+cofre provider add DeepSeek --preset deepseek --model deepseek-chat --command opencode
+cofre provider add Gateway --key-env GATEWAY_API_KEY --openai-url https://gateway.example/v1
+
+cofre use OpenRouter                         # Claude Code on the provider's endpoint, first model
+cofre use OpenRouter --with codex --model vendor/model-b
+cofre use DeepSeek --with shell              # runs the provider's tool, or your shell, with the key exported
+cofre use OpenRouter --window                # same, in a new terminal window
+```
+
+| `--with` | What starts | How the key arrives |
+| --- | --- | --- |
+| `claude` | Claude Code on the Anthropic-compatible endpoint, in a home of its own | `ANTHROPIC_AUTH_TOKEN` |
+| `codex` | Codex on the OpenAI-compatible endpoint, in a home of its own | `COFRE_API_KEY`, read by a provider defined on the command line |
+| `shell` | The provider's tool command, or your shell | The provider's variable (for example `DEEPSEEK_API_KEY`), plus `OPENAI_*` and `ANTHROPIC_*` for the endpoints it has |
+
+Codex needs an endpoint that speaks the Responses API; not every provider does.
+
 ### Shared instructions
 
 Point Cofre at one folder and every managed account links to it: `CLAUDE.md`, `skills`, `commands`, `agents`, `rules` for Claude Code; `AGENTS.md`, `skills`, `prompts` for Codex. `settings.json` / `config.toml` are copied once into new profiles, with credential settings stripped.
