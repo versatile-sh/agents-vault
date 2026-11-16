@@ -2,6 +2,7 @@
 //! and the harness CLI as the only owner of its own OAuth tokens.
 
 pub mod model;
+pub mod secrets;
 pub mod store;
 
 pub use anyhow::Result;
