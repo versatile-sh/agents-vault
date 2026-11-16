@@ -11,10 +11,11 @@ const addButton = byId("add-button");
 const dialogs = { add: byId("add"), edit: byId("edit"), provider: byId("provider"), settings: byId("settings") };
 
 const TABS = {
-  claude: { add: "Add account", title: "No Claude Code accounts yet", text: "Each account gets its own isolated home, so sessions never overwrite each other." },
-  codex: { add: "Add account", title: "No Codex accounts yet", text: "Each account gets its own isolated home, so sessions never overwrite each other." },
-  keys: { add: "Add API key", title: "No API keys yet", text: "Keep one key per provider or router and open it in Claude Code, Codex or any other tool." },
+  claude: { name: "Claude Code", unit: "account", add: "Add account", title: "No Claude Code accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
+  codex: { name: "Codex", unit: "account", add: "Add account", title: "No Codex accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
+  keys: { name: "API keys", unit: "key", add: "Add API key", title: "No API keys yet", text: "Keep one key per provider or router and open it in Claude Code, Codex or any other tool." },
 };
+const MORE_ICON = "M5 12h.01M12 12h.01M19 12h.01";
 const TOOL_NAMES = { claude: "Claude Code", codex: "Codex" };
 
 let tab = "claude";
@@ -35,9 +36,26 @@ function element(tag, properties = {}, children = []) {
   return node;
 }
 
+let toastTimer = 0;
+
 function say(message, bad = false) {
+  clearTimeout(toastTimer);
   notice.textContent = message;
   notice.classList.toggle("bad", bad);
+  notice.classList.toggle("show", Boolean(message));
+  if (message) toastTimer = setTimeout(() => notice.classList.remove("show"), bad ? 9000 : 3500);
+}
+
+function moreButton(label, action) {
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", MORE_ICON);
+  icon.append(path);
+  const button = element("button", { type: "button", class: "more", "aria-label": `Edit ${label}`, title: "Edit" }, [icon]);
+  button.addEventListener("click", action);
+  return button;
 }
 
 function untilReset(resetsAt) {
@@ -53,14 +71,14 @@ function meter(name, title, window) {
   const level = percent >= 90 ? "high" : percent >= 70 ? "warn" : "ok";
   const fill = element("span", { class: "fill" });
   fill.style.width = `${Math.max(percent, 2)}%`;
+  const reset = untilReset(window.resets_at);
   return element(
     "div",
-    { class: "meter", "data-level": level, role: "meter", "aria-label": title, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(percent) },
+    { class: "stat", "data-level": level, role: "meter", "aria-label": title, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(percent) },
     [
-      element("span", { text: name }),
+      element("span", { class: "stat-top" }, [element("span", { text: name }), element("b", { text: `${percent}%` })]),
       element("span", { class: "track" }, [fill]),
-      element("span", { class: "value", text: `${percent}%` }),
-      element("span", { class: "reset", text: untilReset(window.resets_at) }),
+      element("span", { class: "stat-foot", text: reset ? `resets in ${reset}` : "" }),
     ],
   );
 }
@@ -95,6 +113,7 @@ function meters(row) {
 
 function accountRow(row) {
   const info = subtitle(row);
+  const launch = () => act(() => invoke("open_account", { id: row.id }), `Opened ${row.label}`);
   const open = element("button", { type: "button", class: "open", title: `Open ${row.label} in a terminal` }, [
     element("span", { class: "badge", text: row.harness === "claude" ? "CC" : "CX" }),
     element("span", { class: "who" }, [
@@ -103,10 +122,10 @@ function accountRow(row) {
     ]),
     element("span", { class: "meters" }, meters(row)),
   ]);
-  open.addEventListener("click", () => act(() => invoke("open_account", { id: row.id }), `Opened ${row.label}`));
-  const more = element("button", { type: "button", class: "more", text: "⋯", "aria-label": `Edit ${row.label}` });
-  more.addEventListener("click", () => edit(row));
-  return element("li", { class: "account" }, [open, more]);
+  const go = element("button", { type: "button", class: "quiet go", text: "Open", tabindex: "-1" });
+  open.addEventListener("click", launch);
+  go.addEventListener("click", launch);
+  return element("li", { class: "row" }, [open, go, moreButton(row.label, () => edit(row))]);
 }
 
 function toolsOf(provider) {
@@ -119,15 +138,12 @@ function toolsOf(provider) {
 
 function providerRow(provider) {
   const hosts = [...new Set([provider.anthropic_url, provider.openai_url].filter(Boolean).map(host))];
-  const more = element("button", { type: "button", class: "more", text: "⋯", "aria-label": `Edit ${provider.label}` });
-  more.addEventListener("click", () => editProvider(provider));
   const head = element("div", { class: "head" }, [
     element("span", { class: "badge", text: provider.label.slice(0, 2).toUpperCase() }),
     element("span", { class: "who" }, [
       element("strong", { text: provider.label }),
       element("span", { text: [...hosts, provider.key_env].join(" · ") }),
     ]),
-    more,
   ]);
   const launch = element("div", { class: "launch" });
   let select = null;
@@ -135,6 +151,7 @@ function providerRow(provider) {
     select = element("select", { "aria-label": `Model for ${provider.label}` }, provider.models.map((model) => element("option", { text: model, value: model })));
     launch.append(select);
   }
+  launch.append(element("span", { class: "with", text: "open in" }));
   for (const tool of toolsOf(provider)) {
     const name = TOOL_NAMES[tool] ?? provider.command[0] ?? "Shell";
     const button = element("button", { type: "button", class: "tool", text: name, title: `Open ${provider.label} in ${name}` });
@@ -143,7 +160,7 @@ function providerRow(provider) {
     );
     launch.append(button);
   }
-  return element("li", { class: "account provider" }, [head, launch]);
+  return element("li", { class: "row provider" }, [head, moreButton(provider.label, () => editProvider(provider)), launch]);
 }
 
 function render() {
@@ -152,17 +169,23 @@ function render() {
   for (const row of rows) counts[row.harness] += 1;
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.setAttribute("aria-selected", String(button.dataset.tab === tab));
-    button.querySelector("span").textContent = counts[button.dataset.tab] || "";
+    button.querySelector(".count").textContent = counts[button.dataset.tab] || "";
   }
   const onKeys = tab === "keys";
-  accountList.hidden = onKeys;
-  providerList.hidden = !onKeys;
+  const total = counts[tab];
+  const section = TABS[tab];
+  byId("page-title").textContent = section.name;
+  byId("page-caption").textContent = total ? `${total} ${section.unit}${total === 1 ? "" : "s"}` : "nothing here yet";
+  accountList.hidden = onKeys || !total;
+  providerList.hidden = !onKeys || !total;
   accountList.replaceChildren(...visible.map(accountRow));
   providerList.replaceChildren(...providers.map(providerRow));
-  empty.hidden = (onKeys ? providers.length : visible.length) > 0;
-  empty.querySelector("h2").textContent = TABS[tab].title;
-  empty.querySelector("p").textContent = TABS[tab].text;
-  addButton.textContent = TABS[tab].add;
+  empty.hidden = total > 0;
+  addButton.hidden = total === 0;
+  empty.querySelector("h2").textContent = section.title;
+  empty.querySelector("p").textContent = section.text;
+  addButton.textContent = section.add;
+  byId("empty-add").textContent = section.add;
 }
 
 async function load(refresh = false) {
@@ -217,7 +240,7 @@ function openAdd() {
   const form = byId("add-form");
   form.reset();
   showMode();
-  byId("add-title").textContent = `Add ${TOOL_NAMES[tab]} account`;
+  byId("add-title").textContent = `Add a ${TOOL_NAMES[tab]} account`;
   form.querySelector(".error").textContent = "";
   dialogs.add.showModal();
 }
@@ -249,6 +272,7 @@ function editProvider(provider) {
   form.reset();
   byId("provider-title").textContent = provider ? provider.label : "Add API key";
   byId("presets").hidden = Boolean(provider);
+  byId("advanced").open = Boolean(provider);
   for (const node of form.querySelectorAll("[data-only=edit]")) node.hidden = !provider;
   form.elements.key.required = !provider;
   if (provider) {
@@ -336,6 +360,7 @@ byId("relogin").addEventListener("click", () => {
 byId("provider-form").addEventListener("change", (event) => {
   if (event.target.name !== "preset") return;
   const preset = presets.find((entry) => entry.name === event.target.value);
+  byId("advanced").open = !preset;
   fillProvider(preset ?? { label: "", key_env: "", anthropic_url: "", openai_url: "" });
 });
 
@@ -414,7 +439,7 @@ async function start() {
   const choices = [...presets.map((preset) => [preset.name, preset.label]), ["custom", "Custom"]];
   byId("presets").replaceChildren(
     ...choices.map(([value, label]) =>
-      element("label", {}, [element("input", { type: "radio", name: "preset", value }), element("span", { text: label })]),
+      element("label", {}, [element("input", { type: "radio", name: "preset", value }), element("span", {}, [element("strong", { text: label })])]),
     ),
   );
   showMode();
@@ -422,6 +447,7 @@ async function start() {
 }
 
 addButton.addEventListener("click", openAdd);
+byId("empty-add").addEventListener("click", openAdd);
 refreshButton.addEventListener("click", () => load(true));
 document.addEventListener("contextmenu", (event) => event.preventDefault());
 listen("ledger-changed", () => load());
