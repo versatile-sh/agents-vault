@@ -1,22 +1,38 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
-use vvault_core::ledger::{self, clearable, NewAccount, Row};
+use vvault_core::ledger::{self, clearable, NewAccount, ProviderRow, Row};
+use vvault_core::login::{self, Session};
+use vvault_core::models::{self, ModelOption};
 use vvault_core::limits::Window;
 use vvault_core::model::{presets, Preset};
-use vvault_core::{secrets, status, terminal, Auth, Harness, Kit, Provider, Store, Tool};
+use vvault_core::{limits, secrets, status, terminal, Auth, Harness, Kit, Provider, Store, Tool};
 
 const TRAY_ID: &str = "vvault";
 const REFRESH: Duration = Duration::from_secs(60);
 const KEEPALIVE_EVERY: u32 = 10;
 
+const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
+
 type Reply<T> = Result<T, String>;
+
+#[derive(Clone, Default)]
+struct Logins(Arc<Mutex<HashMap<String, Session>>>);
+
+#[derive(Clone, Serialize)]
+struct LoginResult {
+    id: String,
+    label: String,
+    ok: bool,
+}
 
 fn fail(error: anyhow::Error) -> String {
     format!("{error:#}")
@@ -75,13 +91,108 @@ fn open_account(store: State<Store>, id: String) -> Reply<()> {
     open_in_terminal(&store, &id, "run")
 }
 
-#[tauri::command(async)]
-fn login_account(store: State<Store>, id: String) -> Reply<()> {
-    open_in_terminal(&store, &id, "login")
+fn watch_login(app: AppHandle, logins: Logins, id: String, label: String) {
+    std::thread::spawn(move || {
+        let started = std::time::Instant::now();
+        let finished = loop {
+            std::thread::sleep(Duration::from_millis(400));
+            let Ok(mut sessions) = logins.0.lock() else { return };
+            let Some(session) = sessions.get_mut(&id) else { return };
+            let done = session.finished().or((started.elapsed() > LOGIN_TIMEOUT).then_some(false));
+            if let Some(done) = done {
+                sessions.remove(&id);
+                break done;
+            }
+        };
+        let store = app.state::<Store>();
+        let account = store.load().ok().and_then(|config| config.find(&id).ok().cloned());
+        let signed_in = account.as_ref().is_some_and(|account| {
+            let state = status::check(&store, account).is_ok_and(|state| state.logged_in);
+            if state {
+                limits::current(&store, account, 0);
+            }
+            state
+        });
+        refresh_tray(&app);
+        let _ = app.emit("login-finished", LoginResult { id, label, ok: finished && signed_in });
+    });
+}
+
+fn start_login(app: &AppHandle, store: &Store, logins: &Logins, id: &str) -> Reply<()> {
+    let config = store.load().map_err(fail)?;
+    let account = config.find(id).map_err(fail)?;
+    let session = login::start(store, &config, account).map_err(fail)?;
+    logins.0.lock().map_err(|_| "sign-in state is unavailable")?.insert(account.id.clone(), session);
+    watch_login(app.clone(), logins.clone(), account.id.clone(), account.label.clone());
+    Ok(())
 }
 
 #[tauri::command(async)]
-fn add_account(app: AppHandle, store: State<Store>, form: AccountForm) -> Reply<()> {
+fn login_account(app: AppHandle, store: State<Store>, logins: State<Logins>, id: String) -> Reply<()> {
+    start_login(&app, &store, &logins, &id)
+}
+
+#[tauri::command(async)]
+fn login_code(logins: State<Logins>, id: String, code: String) -> Reply<()> {
+    let mut sessions = logins.0.lock().map_err(|_| "sign-in state is unavailable")?;
+    let session = sessions.get_mut(&id).ok_or("this sign-in already ended")?;
+    session.send_code(&code).map_err(fail)
+}
+
+#[tauri::command(async)]
+fn login_reopen(logins: State<Logins>, id: String) -> Reply<()> {
+    let url = {
+        let sessions = logins.0.lock().map_err(|_| "sign-in state is unavailable")?;
+        sessions.get(&id).and_then(Session::url)
+    };
+    login::open_browser(&url.ok_or("the sign-in page is not ready yet")?).map_err(fail)
+}
+
+#[tauri::command(async)]
+fn login_cancel(logins: State<Logins>, id: String) -> Reply<()> {
+    if let Ok(mut sessions) = logins.0.lock() {
+        sessions.remove(&id);
+    }
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn account_models(store: State<Store>, id: String) -> Reply<Vec<ModelOption>> {
+    let config = store.load().map_err(fail)?;
+    models::for_account(&store, config.find(&id).map_err(fail)?).map_err(fail)
+}
+
+#[tauri::command(async)]
+fn harness_models(store: State<Store>, harness: Harness) -> Reply<Vec<ModelOption>> {
+    models::for_harness(&store, harness).map_err(fail)
+}
+
+#[tauri::command(async)]
+fn key_models(harness: Harness, base_url: Option<String>, bearer: bool, key: String) -> Reply<Vec<ModelOption>> {
+    let base_url = base_url.and_then(clearable);
+    let probe = Auth::ApiKey { base_url: base_url.clone(), bearer };
+    vvault_core::Account::new("probe", harness, probe).map_err(fail)?;
+    models::remote(harness, base_url.as_deref(), bearer, key.trim()).map_err(fail)
+}
+
+#[tauri::command(async)]
+fn provider_models(store: State<Store>, id: Option<String>, form: ProviderForm) -> Reply<Vec<ModelOption>> {
+    let mut provider = Provider::new("probe", "PROBE_API_KEY").map_err(fail)?;
+    let typed = form.apply(&mut provider);
+    provider.validate().map_err(fail)?;
+    let saved = match (&typed, id) {
+        (None, Some(id)) => {
+            let config = store.load().map_err(fail)?;
+            secrets::get(&config.provider(&id).map_err(fail)?.id).map_err(fail)?
+        }
+        _ => None,
+    };
+    let key = typed.or(saved).ok_or("type the API key first")?;
+    models::for_provider(&provider, &key).map_err(fail)
+}
+
+#[tauri::command(async)]
+fn add_account(app: AppHandle, store: State<Store>, logins: State<Logins>, form: AccountForm) -> Reply<String> {
     let auth = if form.api_key {
         Auth::ApiKey {
             base_url: form.base_url.and_then(clearable),
@@ -101,9 +212,9 @@ fn add_account(app: AppHandle, store: State<Store>, form: AccountForm) -> Reply<
     let account = ledger::create(&store, new).map_err(fail)?;
     refresh_tray(&app);
     if account.is_login() {
-        open_in_terminal(&store, &account.id, "login")?;
+        start_login(&app, &store, &logins, &account.id)?;
     }
-    Ok(())
+    Ok(account.id)
 }
 
 #[tauri::command(async)]
@@ -233,8 +344,9 @@ impl ProviderForm {
 }
 
 #[tauri::command(async)]
-fn providers(store: State<Store>) -> Reply<Vec<Provider>> {
-    Ok(store.load().map_err(fail)?.providers)
+fn providers(store: State<Store>, refresh: bool) -> Reply<Vec<ProviderRow>> {
+    let config = store.load().map_err(fail)?;
+    Ok(ledger::provider_rows(&store, &config, if refresh { 0 } else { 120 }))
 }
 
 #[tauri::command]
@@ -407,10 +519,18 @@ fn main() {
     };
     tauri::Builder::default()
         .manage(store)
+        .manage(Logins::default())
         .invoke_handler(tauri::generate_handler![
             accounts,
             open_account,
             login_account,
+            login_code,
+            login_reopen,
+            login_cancel,
+            account_models,
+            harness_models,
+            key_models,
+            provider_models,
             add_account,
             adopt_account,
             update_account,
