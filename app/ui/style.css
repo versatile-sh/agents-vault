@@ -76,7 +76,7 @@ svg { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColo
 .brand .hub { fill: currentColor; }
 .wordmark { font-size: 16px; white-space: nowrap; font-weight: 500; letter-spacing: -0.02em; }
 .wordmark .tld { margin-left: 0.1em; font: 0.76em var(--mono); letter-spacing: 0; color: var(--lime); }
-.wordmark .product { margin-left: 0.5em; color: var(--muted); }
+.wordmark .host { color: var(--muted); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 
