@@ -37,19 +37,19 @@ pub fn clear_default(store: &Store, harness: Harness) -> Result<()> {
     apply(store)
 }
 
-/// Variables that point each harness at its default account.
+/// Variables for the harnesses that have a default; a harness without one is left untouched.
 pub fn exports(store: &Store, config: &Config) -> Vec<Export> {
     HARNESSES
         .iter()
-        .map(|harness| {
+        .filter_map(|harness| {
+            let id = config.defaults.get(harness.program())?;
             let account = config
-                .defaults
-                .get(harness.program())
-                .and_then(|id| config.accounts.iter().find(|account| &account.id == id && account.harness == *harness));
-            let home = account
-                .filter(|account| !account.native_home)
-                .map(|account| store.home(account).to_string_lossy().into_owned());
-            (harness.home_env().to_string(), home)
+                .accounts
+                .iter()
+                .find(|account| &account.id == id && account.harness == *harness)?;
+            let home =
+                (!account.native_home).then(|| store.home(account).to_string_lossy().into_owned());
+            Some((harness.home_env().to_string(), home))
         })
         .collect()
 }
@@ -65,8 +65,12 @@ pub fn snippet(shell: &str, exports: &[Export]) -> String {
         .map(|(name, value)| match (shell, value) {
             ("fish", Some(value)) => format!("set -gx {name} {}\n", quote(value)),
             ("fish", None) => format!("set -e {name}\n"),
-            ("powershell", Some(value)) => format!("$env:{name} = '{}'\n", value.replace('\'', "''")),
-            ("powershell", None) => format!("Remove-Item Env:{name} -ErrorAction SilentlyContinue\n"),
+            ("powershell", Some(value)) => {
+                format!("$env:{name} = '{}'\n", value.replace('\'', "''"))
+            }
+            ("powershell", None) => {
+                format!("Remove-Item Env:{name} -ErrorAction SilentlyContinue\n")
+            }
             (_, Some(value)) => format!("export {name}={}\n", quote(value)),
             (_, None) => format!("unset {name}\n"),
         })
@@ -95,7 +99,10 @@ pub fn with_block(profile: &str, block: &str) -> String {
 }
 
 fn home() -> Result<PathBuf> {
-    Ok(directories::BaseDirs::new().context("could not resolve the home directory")?.home_dir().to_path_buf())
+    Ok(directories::BaseDirs::new()
+        .context("could not resolve the home directory")?
+        .home_dir()
+        .to_path_buf())
 }
 
 fn install_hooks(home: &Path, cli: &Path) -> Result<()> {
@@ -104,7 +111,8 @@ fn install_hooks(home: &Path, cli: &Path) -> Result<()> {
         if let Ok(current) = std::fs::read_to_string(&path) {
             let updated = with_block(&current, &block(shell, cli));
             if updated != current {
-                std::fs::write(&path, updated).with_context(|| format!("writing {}", path.display()))?;
+                std::fs::write(&path, updated)
+                    .with_context(|| format!("writing {}", path.display()))?;
             }
         }
     }
@@ -177,29 +185,54 @@ mod tests {
     }
 
     #[test]
-    fn points_each_harness_at_its_default_and_unsets_the_rest() {
+    fn points_each_harness_at_its_default_and_leaves_the_others_alone() {
         let (_guard, store, config) = fixture();
         let exports = exports(&store, &config);
         assert_eq!(exports[0].0, "CLAUDE_CONFIG_DIR");
-        assert!(exports[0].1.as_ref().unwrap().ends_with(&config.accounts[0].id));
+        assert!(exports[0]
+            .1
+            .as_ref()
+            .unwrap()
+            .ends_with(&config.accounts[0].id));
         assert_eq!(exports[1], ("CODEX_HOME".to_string(), None));
-        assert_eq!(exports[2], ("GROK_HOME".to_string(), None));
+        assert_eq!(exports.len(), 2);
     }
 
     #[test]
     fn writes_each_shell_in_its_own_syntax() {
-        let exports = vec![("A_HOME".to_string(), Some("/it's".to_string())), ("B_HOME".to_string(), None)];
-        assert_eq!(snippet("bash", &exports), "export A_HOME='/it'\\''s'\nunset B_HOME\n");
-        assert_eq!(snippet("fish", &exports), "set -gx A_HOME '/it'\\''s'\nset -e B_HOME\n");
+        let exports = vec![
+            ("A_HOME".to_string(), Some("/it's".to_string())),
+            ("B_HOME".to_string(), None),
+        ];
+        assert_eq!(
+            snippet("bash", &exports),
+            "export A_HOME='/it'\\''s'\nunset B_HOME\n"
+        );
+        assert_eq!(
+            snippet("fish", &exports),
+            "set -gx A_HOME '/it'\\''s'\nset -e B_HOME\n"
+        );
         assert!(snippet("powershell", &exports).starts_with("$env:A_HOME = '/it''s'\n"));
     }
 
     #[test]
     fn keeps_one_block_in_a_profile_however_often_it_runs() {
-        let first = with_block("alias l=ls\n", "# >>> versatile vault >>>\none\n# <<< versatile vault <<<\n");
-        assert_eq!(first, "alias l=ls\n\n# >>> versatile vault >>>\none\n# <<< versatile vault <<<\n");
-        let second = with_block(&format!("{first}export X=1\n"), "# >>> versatile vault >>>\ntwo\n# <<< versatile vault <<<\n");
-        assert_eq!(second, "alias l=ls\n\n# >>> versatile vault >>>\ntwo\n# <<< versatile vault <<<\nexport X=1\n");
+        let first = with_block(
+            "alias l=ls\n",
+            "# >>> versatile vault >>>\none\n# <<< versatile vault <<<\n",
+        );
+        assert_eq!(
+            first,
+            "alias l=ls\n\n# >>> versatile vault >>>\none\n# <<< versatile vault <<<\n"
+        );
+        let second = with_block(
+            &format!("{first}export X=1\n"),
+            "# >>> versatile vault >>>\ntwo\n# <<< versatile vault <<<\n",
+        );
+        assert_eq!(
+            second,
+            "alias l=ls\n\n# >>> versatile vault >>>\ntwo\n# <<< versatile vault <<<\nexport X=1\n"
+        );
     }
 
     #[test]
