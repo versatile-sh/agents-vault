@@ -220,7 +220,8 @@ struct ProviderForm {
 
 impl ProviderForm {
     fn apply(self, provider: &mut Provider) -> Option<String> {
-        let words = |items: Vec<String>| items.into_iter().filter_map(clearable).collect::<Vec<_>>();
+        let words =
+            |items: Vec<String>| items.into_iter().filter_map(clearable).collect::<Vec<_>>();
         provider.label = self.label.trim().to_string();
         provider.key_env = self.key_env.trim().to_string();
         provider.anthropic_url = self.anthropic_url.and_then(clearable);
@@ -251,12 +252,19 @@ fn add_provider(app: AppHandle, store: State<Store>, form: ProviderForm) -> Repl
 }
 
 #[tauri::command(async)]
-fn update_provider(app: AppHandle, store: State<Store>, id: String, form: ProviderForm) -> Reply<()> {
+fn update_provider(
+    app: AppHandle,
+    store: State<Store>,
+    id: String,
+    form: ProviderForm,
+) -> Reply<()> {
     let mut slot = Some(form);
     let (provider_id, key) = store
         .update(|config| {
             let index = config.provider_position(&id)?;
-            let form = slot.take().ok_or_else(|| anyhow::anyhow!("form already used"))?;
+            let form = slot
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("form already used"))?;
             let key = form.apply(&mut config.providers[index]);
             Ok((config.providers[index].id.clone(), key))
         })
@@ -275,13 +283,25 @@ fn remove_provider(app: AppHandle, store: State<Store>, id: String) -> Reply<()>
     Ok(())
 }
 
-fn launch_provider(store: &Store, id: &str, tool: Option<Tool>, model: Option<String>) -> Reply<()> {
+fn launch_provider(
+    store: &Store,
+    id: &str,
+    tool: Option<Tool>,
+    model: Option<String>,
+) -> Reply<()> {
     let config = store.load().map_err(fail)?;
     let provider = config.provider(id).map_err(fail)?;
     let tool = tool.unwrap_or(provider.tools()[0]);
     let model = model.and_then(clearable);
     let home = directories_home();
-    terminal::open_provider(provider, tool, model.as_deref(), &config.terminal, home.as_deref()).map_err(fail)
+    terminal::open_provider(
+        provider,
+        tool,
+        model.as_deref(),
+        &config.terminal,
+        home.as_deref(),
+    )
+    .map_err(fail)
 }
 
 #[tauri::command(async)]
@@ -324,9 +344,14 @@ fn refresh_tray(app: &AppHandle) {
     if !rows.is_empty() {
         menu = menu.separator();
     }
-    let keys = store.load().map(|config| config.providers).unwrap_or_default();
+    let keys = store
+        .load()
+        .map(|config| config.providers)
+        .unwrap_or_default();
     for provider in &keys {
-        if let Ok(item) = MenuItemBuilder::with_id(format!("use:{}", provider.id), &provider.label).build(app) {
+        if let Ok(item) =
+            MenuItemBuilder::with_id(format!("use:{}", provider.id), &provider.label).build(app)
+        {
             menu = menu.item(&item);
         }
     }

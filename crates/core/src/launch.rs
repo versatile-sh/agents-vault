@@ -178,18 +178,42 @@ pub fn plan(
 }
 
 /// Account view of a provider for one harness, with its own home under the provider profile.
-pub fn provider_account(store: &Store, provider: &Provider, harness: Harness, model: Option<&str>) -> Result<Account> {
+pub fn provider_account(
+    store: &Store,
+    provider: &Provider,
+    harness: Harness,
+    model: Option<&str>,
+) -> Result<Account> {
     let url = match harness {
         Harness::Claude => provider.anthropic_url.clone(),
         Harness::Codex => provider.openai_url.clone(),
     };
     let Some(url) = url else {
-        bail!("`{}` has no endpoint for {}", provider.label, harness.program());
+        bail!(
+            "`{}` has no endpoint for {}",
+            provider.label,
+            harness.program()
+        );
     };
-    let mut account = Account::new(&provider.label, harness, Auth::ApiKey { base_url: Some(url), bearer: true })?;
+    let mut account = Account::new(
+        &provider.label,
+        harness,
+        Auth::ApiKey {
+            base_url: Some(url),
+            bearer: true,
+        },
+    )?;
     account.id = provider.id.clone();
-    account.model = model.map(str::to_string).or_else(|| provider.models.first().cloned());
-    account.home = Some(store.root().join("profiles").join(&provider.id).join(harness.program()));
+    account.model = model
+        .map(str::to_string)
+        .or_else(|| provider.models.first().cloned());
+    account.home = Some(
+        store
+            .root()
+            .join("profiles")
+            .join(&provider.id)
+            .join(harness.program()),
+    );
     account.validate()?;
     Ok(account)
 }
@@ -218,7 +242,9 @@ pub fn plan_provider(
         Tool::Claude => Harness::Claude,
         Tool::Codex => Harness::Codex,
         Tool::Shell => {
-            let key = secret.context("this provider has no API key saved; run `cofre provider key` to set one")?;
+            let key = secret.context(
+                "this provider has no API key saved; run `cofre provider key` to set one",
+            )?;
             let mut env = BTreeMap::from([(provider.key_env.clone(), key.to_string())]);
             if let Some(url) = &provider.openai_url {
                 env.insert("OPENAI_BASE_URL".into(), url.clone());
@@ -230,7 +256,8 @@ pub fn plan_provider(
             }
             let (program, mut args) = match provider.command.split_first() {
                 Some((program, rest)) => {
-                    let found = which::which(program).with_context(|| format!("`{program}` was not found on PATH"))?;
+                    let found = which::which(program)
+                        .with_context(|| format!("`{program}` was not found on PATH"))?;
                     (found, rest.to_vec())
                 }
                 None => (shell()?, Vec::new()),
@@ -416,11 +443,27 @@ mod tests {
         }
         let (_guard, store) = store();
         let provider = provider();
-        let launch = plan_provider(&store, &provider, Tool::Claude, Some("deepseek-reasoner"), Some("sk-secret"), Path::new("cofre"), &[]).unwrap();
-        assert_eq!(launch.env["ANTHROPIC_BASE_URL"], "https://api.deepseek.com/anthropic");
+        let launch = plan_provider(
+            &store,
+            &provider,
+            Tool::Claude,
+            Some("deepseek-reasoner"),
+            Some("sk-secret"),
+            Path::new("cofre"),
+            &[],
+        )
+        .unwrap();
+        assert_eq!(
+            launch.env["ANTHROPIC_BASE_URL"],
+            "https://api.deepseek.com/anthropic"
+        );
         assert_eq!(launch.env["ANTHROPIC_AUTH_TOKEN"], "sk-secret");
         assert_eq!(launch.env["ANTHROPIC_MODEL"], "deepseek-reasoner");
-        let home = store.root().join("profiles").join(&provider.id).join("claude");
+        let home = store
+            .root()
+            .join("profiles")
+            .join(&provider.id)
+            .join("claude");
         assert_eq!(launch.env["CLAUDE_CONFIG_DIR"], home.to_string_lossy());
         assert!(home.is_dir());
     }
@@ -435,16 +478,37 @@ mod tests {
     #[test]
     fn provider_without_a_matching_endpoint_refuses_the_harness() {
         let (_guard, store) = store();
-        let error = plan_provider(&store, &provider(), Tool::Codex, None, Some("k"), Path::new("cofre"), &[]).unwrap_err();
+        let error = plan_provider(
+            &store,
+            &provider(),
+            Tool::Codex,
+            None,
+            Some("k"),
+            Path::new("cofre"),
+            &[],
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("no endpoint for codex"));
     }
 
     #[test]
     fn provider_shell_exports_the_key_under_its_own_name() {
         let (_guard, store) = store();
-        let launch = plan_provider(&store, &provider(), Tool::Shell, None, Some("sk-secret"), Path::new("cofre"), &[]).unwrap();
+        let launch = plan_provider(
+            &store,
+            &provider(),
+            Tool::Shell,
+            None,
+            Some("sk-secret"),
+            Path::new("cofre"),
+            &[],
+        )
+        .unwrap();
         assert_eq!(launch.env["DEEPSEEK_API_KEY"], "sk-secret");
-        assert_eq!(launch.env["ANTHROPIC_BASE_URL"], "https://api.deepseek.com/anthropic");
+        assert_eq!(
+            launch.env["ANTHROPIC_BASE_URL"],
+            "https://api.deepseek.com/anthropic"
+        );
         assert!(!launch.env.contains_key("OPENAI_API_KEY"));
         assert!(launch.args.is_empty());
     }

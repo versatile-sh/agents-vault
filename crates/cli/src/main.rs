@@ -6,10 +6,12 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use cofre_core::ledger::{self, clearable, NewAccount, Row};
 use cofre_core::limits::{self, Window};
+use cofre_core::model::presets;
 use cofre_core::status::{self, Pass};
 use cofre_core::store::now;
-use cofre_core::model::presets;
-use cofre_core::{kit, launch, secrets, terminal, Account, Auth, Config, Harness, Provider, Store, Tool};
+use cofre_core::{
+    kit, launch, secrets, terminal, Account, Auth, Config, Harness, Provider, Store, Tool,
+};
 use serde_json::{json, Value};
 
 #[derive(Parser)]
@@ -87,7 +89,10 @@ enum Action {
     /// Start a tool on a provider key: claude, codex, or a shell with the key exported
     Use {
         provider: String,
-        #[arg(long = "with", help = "claude, codex or shell; defaults to the first the provider supports")]
+        #[arg(
+            long = "with",
+            help = "claude, codex or shell; defaults to the first the provider supports"
+        )]
         tool: Option<Tool>,
         #[arg(long)]
         model: Option<String>,
@@ -155,11 +160,17 @@ enum ProviderAction {
         preset: Option<String>,
         #[arg(long, help = "Anthropic-compatible endpoint, used by Claude Code")]
         anthropic_url: Option<String>,
-        #[arg(long, help = "OpenAI-compatible endpoint, used by Codex and most other tools")]
+        #[arg(
+            long,
+            help = "OpenAI-compatible endpoint, used by Codex and most other tools"
+        )]
         openai_url: Option<String>,
         #[arg(long, help = "Variable the key is exported as, e.g. DEEPSEEK_API_KEY")]
         key_env: Option<String>,
-        #[arg(long = "model", help = "Model offered for this provider; repeat for more")]
+        #[arg(
+            long = "model",
+            help = "Model offered for this provider; repeat for more"
+        )]
         models: Vec<String>,
         #[arg(long, num_args = 1.., help = "Tool started by `--with shell` instead of your shell, e.g. opencode")]
         command: Vec<String>,
@@ -172,7 +183,10 @@ enum ProviderAction {
         json: bool,
     },
     /// Replace the models offered for a provider
-    Models { provider: String, models: Vec<String> },
+    Models {
+        provider: String,
+        models: Vec<String>,
+    },
     /// Save or replace the key of a provider in the OS keychain
     Key {
         provider: String,
@@ -353,7 +367,16 @@ fn run(store: &Store, key: &str, extra: &[String]) -> Result<i32> {
 
 fn provider(store: &Store, action: ProviderAction) -> Result<()> {
     match action {
-        ProviderAction::Add { label, preset, anthropic_url, openai_url, key_env, models, command, key_stdin } => {
+        ProviderAction::Add {
+            label,
+            preset,
+            anthropic_url,
+            openai_url,
+            key_env,
+            models,
+            command,
+            key_stdin,
+        } => {
             let preset = match preset {
                 Some(name) => Some(
                     presets()
@@ -367,23 +390,39 @@ fn provider(store: &Store, action: ProviderAction) -> Result<()> {
                 .or(preset.as_ref().map(|preset| preset.key_env.to_string()))
                 .context("pass --key-env (for example MYPROVIDER_API_KEY) or a --preset")?;
             let mut entry = Provider::new(&label, &key_env)?;
-            let from = |given: Option<String>, known: Option<&str>| given.and_then(clearable).or(known.map(str::to_string));
-            entry.anthropic_url = from(anthropic_url, preset.as_ref().and_then(|preset| preset.anthropic_url));
-            entry.openai_url = from(openai_url, preset.as_ref().and_then(|preset| preset.openai_url));
+            let from = |given: Option<String>, known: Option<&str>| {
+                given.and_then(clearable).or(known.map(str::to_string))
+            };
+            entry.anthropic_url = from(
+                anthropic_url,
+                preset.as_ref().and_then(|preset| preset.anthropic_url),
+            );
+            entry.openai_url = from(
+                openai_url,
+                preset.as_ref().and_then(|preset| preset.openai_url),
+            );
             entry.models = models;
             entry.command = command;
             entry.validate()?;
             let saved = ledger::create_provider(store, entry, &read_key(key_stdin)?)?;
-            println!("Added {}. Start it with `cofre use {}`.", saved.label, saved.label);
+            println!(
+                "Added {}. Start it with `cofre use {}`.",
+                saved.label, saved.label
+            );
         }
         ProviderAction::List { json } => {
             let config = store.load()?;
             if json {
-                println!("{}", serde_json::to_string_pretty(&json!({ "providers": config.providers }))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({ "providers": config.providers }))?
+                );
                 return Ok(());
             }
             if config.providers.is_empty() {
-                println!("No providers yet. Try `cofre provider add OpenRouter --preset openrouter`.");
+                println!(
+                    "No providers yet. Try `cofre provider add OpenRouter --preset openrouter`."
+                );
             }
             for entry in &config.providers {
                 let tools: Vec<&str> = entry
@@ -395,7 +434,13 @@ fn provider(store: &Store, action: ProviderAction) -> Result<()> {
                         Tool::Shell => "shell",
                     })
                     .collect();
-                println!("{:<20} {:<22} {:<20} {}", entry.label, entry.key_env, tools.join(","), entry.models.join(" "));
+                println!(
+                    "{:<20} {:<22} {:<20} {}",
+                    entry.label,
+                    entry.key_env,
+                    tools.join(","),
+                    entry.models.join(" ")
+                );
             }
         }
         ProviderAction::Models { provider, models } => {
@@ -405,7 +450,10 @@ fn provider(store: &Store, action: ProviderAction) -> Result<()> {
                 Ok(())
             })?;
         }
-        ProviderAction::Key { provider, key_stdin } => {
+        ProviderAction::Key {
+            provider,
+            key_stdin,
+        } => {
             let config = store.load()?;
             let entry = config.provider(&provider)?;
             secrets::set(&entry.id, &read_key(key_stdin)?)?;
@@ -413,19 +461,36 @@ fn provider(store: &Store, action: ProviderAction) -> Result<()> {
         }
         ProviderAction::Remove { provider, purge } => {
             let (removed, purged) = ledger::remove_provider(store, &provider, purge)?;
-            println!("Removed {}{}.", removed.label, if purged { " and its profiles" } else { "" });
+            println!(
+                "Removed {}{}.",
+                removed.label,
+                if purged { " and its profiles" } else { "" }
+            );
         }
     }
     Ok(())
 }
 
-fn use_provider(store: &Store, key: &str, tool: Option<Tool>, model: Option<String>, window: bool, extra: &[String]) -> Result<i32> {
+fn use_provider(
+    store: &Store,
+    key: &str,
+    tool: Option<Tool>,
+    model: Option<String>,
+    window: bool,
+    extra: &[String],
+) -> Result<i32> {
     let config = store.load()?;
     let entry = config.provider(key)?;
     let tool = tool.unwrap_or(entry.tools()[0]);
     let model = model.and_then(clearable);
     if window {
-        terminal::open_provider(entry, tool, model.as_deref(), &config.terminal, std::env::current_dir().ok().as_deref())?;
+        terminal::open_provider(
+            entry,
+            tool,
+            model.as_deref(),
+            &config.terminal,
+            std::env::current_dir().ok().as_deref(),
+        )?;
         return Ok(0);
     }
     let harness = match tool {
@@ -438,7 +503,15 @@ fn use_provider(store: &Store, key: &str, tool: Option<Tool>, model: Option<Stri
         prepare(store, &config, &account)?;
     }
     let secret = secrets::get(&entry.id)?;
-    let plan = launch::plan_provider(store, entry, tool, model.as_deref(), secret.as_deref(), &terminal::cli_path()?, extra)?;
+    let plan = launch::plan_provider(
+        store,
+        entry,
+        tool,
+        model.as_deref(),
+        secret.as_deref(),
+        &terminal::cli_path()?,
+        extra,
+    )?;
     launch::exec(&plan)
 }
 
@@ -605,12 +678,22 @@ fn dispatch(store: &Store, action: Action) -> Result<i32> {
         Action::Open { account } => {
             let config = store.load()?;
             let account = config.find(&account)?;
-            terminal::open_account(account, "run", &config.terminal, std::env::current_dir().ok().as_deref())?;
+            terminal::open_account(
+                account,
+                "run",
+                &config.terminal,
+                std::env::current_dir().ok().as_deref(),
+            )?;
         }
         Action::Provider { command } => provider(store, command)?,
-        Action::Use { provider, tool, model, window, args, .. } => {
-            return use_provider(store, &provider, tool, model, window, &args)
-        }
+        Action::Use {
+            provider,
+            tool,
+            model,
+            window,
+            args,
+            ..
+        } => return use_provider(store, &provider, tool, model, window, &args),
         Action::Set {
             account,
             label,

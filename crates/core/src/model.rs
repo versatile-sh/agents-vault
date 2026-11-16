@@ -257,13 +257,21 @@ impl Provider {
         uuid::Uuid::parse_str(&self.id).context("invalid provider id")?;
         text("label", &self.label, 80)?;
         let named = self.key_env.len() <= 64
-            && self.key_env.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+            && self
+                .key_env
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
             && self.key_env.starts_with(|c: char| c.is_ascii_uppercase())
-            && ["_API_KEY", "_KEY", "_TOKEN"].iter().any(|suffix| self.key_env.ends_with(suffix));
+            && ["_API_KEY", "_KEY", "_TOKEN"]
+                .iter()
+                .any(|suffix| self.key_env.ends_with(suffix));
         if !named {
             bail!("the key variable must look like PROVIDER_API_KEY (ending in _API_KEY, _KEY or _TOKEN)");
         }
-        for url in [&self.anthropic_url, &self.openai_url].into_iter().flatten() {
+        for url in [&self.anthropic_url, &self.openai_url]
+            .into_iter()
+            .flatten()
+        {
             endpoint(url)?;
         }
         for model in &self.models {
@@ -366,7 +374,11 @@ impl Config {
 
     /// Index of the account matching an id, unique id prefix or exact label.
     pub fn position(&self, key: &str) -> Result<usize> {
-        let names: Vec<(&str, &str)> = self.accounts.iter().map(|a| (a.id.as_str(), a.label.as_str())).collect();
+        let names: Vec<(&str, &str)> = self
+            .accounts
+            .iter()
+            .map(|a| (a.id.as_str(), a.label.as_str()))
+            .collect();
         locate("account", &names, key)
     }
 
@@ -377,7 +389,11 @@ impl Config {
 
     /// Index of the provider matching an id, unique id prefix or exact label.
     pub fn provider_position(&self, key: &str) -> Result<usize> {
-        let names: Vec<(&str, &str)> = self.providers.iter().map(|p| (p.id.as_str(), p.label.as_str())).collect();
+        let names: Vec<(&str, &str)> = self
+            .providers
+            .iter()
+            .map(|p| (p.id.as_str(), p.label.as_str()))
+            .collect();
         locate("provider", &names, key)
     }
 
@@ -407,7 +423,9 @@ fn locate(kind: &str, names: &[(&str, &str)], key: &str) -> Result<usize> {
         .filter(|&i| names[i].0 == wanted || names[i].1.eq_ignore_ascii_case(wanted))
         .collect();
     if matches.is_empty() {
-        matches = (0..names.len()).filter(|&i| names[i].0.starts_with(wanted)).collect();
+        matches = (0..names.len())
+            .filter(|&i| names[i].0.starts_with(wanted))
+            .collect();
     }
     match matches.as_slice() {
         [index] => Ok(*index),

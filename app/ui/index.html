@@ -3,43 +3,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="dark">
 <title>Cofre</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="bar">
-  <h1><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="1.6" class="hub"/><path d="M12 3.8v16.4M4.9 7.9l14.2 8.2M4.9 16.1l14.2-8.2"/></svg>Cofre</h1>
+  <h1><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="1.6" class="hub"/><path d="M12 3.8v16.4M4.9 7.9l14.2 8.2M4.9 16.1l14.2-8.2"/></svg>cofre</h1>
   <div class="bar-actions">
     <button type="button" id="refresh" class="ghost" title="Refresh limits" aria-label="Refresh limits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg></button>
     <button type="button" id="open-settings" class="ghost" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
   </div>
 </header>
 
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button type="button" role="tab" data-tab="claude" aria-selected="true">Claude Code<span></span></button>
+  <button type="button" role="tab" data-tab="codex" aria-selected="false">Codex<span></span></button>
+  <button type="button" role="tab" data-tab="keys" aria-selected="false">API keys<span></span></button>
+</nav>
+
 <main>
   <ul id="accounts" class="accounts" aria-label="Accounts"></ul>
+  <ul id="providers" class="accounts" aria-label="API keys" hidden></ul>
   <section id="empty" class="empty" hidden>
-    <h2>No accounts yet</h2>
-    <p>Each account gets its own isolated home, so sessions never overwrite each other. Keys stay in your system keychain.</p>
-    <button type="button" class="primary" data-open="add">Add an account</button>
+    <h2></h2>
+    <p></p>
   </section>
 </main>
 
 <footer class="foot">
-  <button type="button" class="primary" data-open="add">Add account</button>
+  <button type="button" class="primary" id="add-button">Add account</button>
   <p id="notice" class="notice" role="status" aria-live="polite"></p>
 </footer>
 
 <dialog id="add" aria-labelledby="add-title">
   <form method="dialog" id="add-form">
     <h2 id="add-title">Add account</h2>
-    <fieldset class="segmented" aria-label="Harness">
-      <label><input type="radio" name="harness" value="claude" checked><span>Claude Code</span></label>
-      <label><input type="radio" name="harness" value="codex"><span>Codex</span></label>
-    </fieldset>
     <fieldset class="segmented" aria-label="How it signs in">
       <label><input type="radio" name="mode" value="login" checked><span>Sign in</span></label>
-      <label><input type="radio" name="mode" value="key"><span>API key / router</span></label>
+      <label><input type="radio" name="mode" value="key"><span>API key</span></label>
       <label><input type="radio" name="mode" value="adopt"><span>Existing login</span></label>
     </fieldset>
     <p class="hint" data-mode="login">A terminal opens with the official sign-in. Cofre never sees or copies your token.</p>
@@ -71,6 +73,25 @@
         <button type="button" class="quiet danger" id="remove">Remove</button>
         <button type="button" class="quiet" id="relogin" data-only="login">Sign in again</button>
       </span>
+      <span><button type="button" class="quiet" data-close>Cancel</button><button type="submit" class="primary">Save</button></span>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="provider" aria-labelledby="provider-title">
+  <form method="dialog" id="provider-form">
+    <h2 id="provider-title">Add API key</h2>
+    <fieldset class="segmented" aria-label="Provider" id="presets"></fieldset>
+    <label class="field">Name<input name="label" required maxlength="80" autocomplete="off" placeholder="OpenRouter, DeepSeek, my gateway…"></label>
+    <label class="field">API key <small data-only="edit">leave empty to keep</small><input name="key" type="password" autocomplete="off" spellcheck="false"></label>
+    <label class="field">Models <small>separated by spaces; the first is the default</small><input name="models" class="mono" autocomplete="off" spellcheck="false" placeholder="vendor/model another-model"></label>
+    <label class="field">Anthropic-compatible endpoint <small>opens in Claude Code</small><input name="anthropic_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
+    <label class="field">OpenAI-compatible endpoint <small>opens in Codex and other tools</small><input name="openai_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
+    <label class="field">Key variable <small>the name tools read it from</small><input name="key_env" class="mono" required autocomplete="off" spellcheck="false" placeholder="PROVIDER_API_KEY"></label>
+    <label class="field">Tool command <small>optional; otherwise a shell with the key exported</small><input name="command" class="mono" autocomplete="off" spellcheck="false" placeholder="opencode"></label>
+    <p class="error" role="alert"></p>
+    <menu class="spread">
+      <span><button type="button" class="quiet danger" id="remove-provider" data-only="edit">Remove</button></span>
       <span><button type="button" class="quiet" data-close>Cancel</button><button type="submit" class="primary">Save</button></span>
     </menu>
   </form>
