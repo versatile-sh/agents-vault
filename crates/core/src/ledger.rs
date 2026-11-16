@@ -128,7 +128,12 @@ pub fn remove(store: &Store, key: &str, purge: bool) -> Result<(Account, bool)> 
 /// Registers a provider; its key goes to the OS keychain, never to the ledger.
 pub fn create_provider(store: &Store, provider: Provider, key: &str) -> Result<Provider> {
     provider.validate()?;
-    let taken = |config: &Config| config.providers.iter().any(|other| other.label.eq_ignore_ascii_case(&provider.label));
+    let taken = |config: &Config| {
+        config
+            .providers
+            .iter()
+            .any(|other| other.label.eq_ignore_ascii_case(&provider.label))
+    };
     if taken(&store.load()?) {
         bail!("a provider named `{}` already exists", provider.label);
     }

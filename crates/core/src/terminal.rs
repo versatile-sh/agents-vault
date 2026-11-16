@@ -87,7 +87,12 @@ fn spawn(mut command: Command, directory: Option<&Path>) -> Result<()> {
 }
 
 /// Opens a terminal window running `cofre <arguments>`; secrets are resolved inside it.
-pub fn open(arguments: &[String], title: &str, custom: &[String], directory: Option<&Path>) -> Result<()> {
+pub fn open(
+    arguments: &[String],
+    title: &str,
+    custom: &[String],
+    directory: Option<&Path>,
+) -> Result<()> {
     let cli = cli_path()?;
     if let Some((program, prefix)) = custom.split_first() {
         let mut command = Command::new(program);
@@ -111,24 +116,46 @@ pub fn open(arguments: &[String], title: &str, custom: &[String], directory: Opt
 }
 
 /// Opens a terminal window on an account, running or signing it in.
-pub fn open_account(account: &Account, action: &str, custom: &[String], directory: Option<&Path>) -> Result<()> {
+pub fn open_account(
+    account: &Account,
+    action: &str,
+    custom: &[String],
+    directory: Option<&Path>,
+) -> Result<()> {
     let arguments = [action.to_string(), account.id.clone(), "--hold".to_string()];
     let title = format!("{} · {}", account.harness.program(), account.label);
     open(&arguments, &title, custom, directory)
 }
 
 /// Opens a terminal window on a provider with the chosen tool and model.
-pub fn open_provider(provider: &Provider, tool: Tool, model: Option<&str>, custom: &[String], directory: Option<&Path>) -> Result<()> {
+pub fn open_provider(
+    provider: &Provider,
+    tool: Tool,
+    model: Option<&str>,
+    custom: &[String],
+    directory: Option<&Path>,
+) -> Result<()> {
     let name = match tool {
         Tool::Claude => "claude",
         Tool::Codex => "codex",
         Tool::Shell => "shell",
     };
-    let mut arguments = vec!["use".to_string(), provider.id.clone(), "--with".to_string(), name.to_string(), "--hold".to_string()];
+    let mut arguments = vec![
+        "use".to_string(),
+        provider.id.clone(),
+        "--with".to_string(),
+        name.to_string(),
+        "--hold".to_string(),
+    ];
     if let Some(model) = model {
         arguments.extend(["--model".to_string(), model.to_string()]);
     }
-    open(&arguments, &format!("{name} · {}", provider.label), custom, directory)
+    open(
+        &arguments,
+        &format!("{name} · {}", provider.label),
+        custom,
+        directory,
+    )
 }
 
 #[cfg(test)]
