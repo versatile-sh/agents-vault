@@ -9,6 +9,7 @@ pub mod proc;
 pub mod secrets;
 pub mod status;
 pub mod store;
+pub mod terminal;
 
 pub use anyhow::Result;
 
