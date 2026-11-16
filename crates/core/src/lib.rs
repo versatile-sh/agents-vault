@@ -1,0 +1,11 @@
+//! Account ledger core: one isolated home per account, secrets in the OS keychain,
+//! and the harness CLI as the only owner of its own OAuth tokens.
+
+pub mod model;
+pub mod store;
+
+pub use anyhow::Result;
+
+pub use model::{Account, Auth, Config, Harness, Kit, Provider, Tool};
+
+pub use store::Store;
