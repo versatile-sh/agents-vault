@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use vvault_core::balance::Balance;
 use vvault_core::ledger::{self, clearable, NewAccount, Row};
 use vvault_core::limits::{self, Window};
+use vvault_core::machine;
 use vvault_core::model::presets;
 use vvault_core::models;
 use vvault_core::status::{self, Pass};
@@ -151,6 +152,20 @@ enum Action {
         #[arg(long)]
         harness: Option<Harness>,
     },
+    /// Make an account the one plain `claude`, `codex` or `grok` uses in new terminals and apps
+    Default {
+        account: Option<String>,
+        #[arg(long, value_name = "HARNESS", help = "Stop overriding this harness")]
+        clear: Option<Harness>,
+    },
+    /// Print the shell code that applies the machine defaults (used by the shell hook)
+    Env {
+        #[arg(
+            long,
+            help = "bash, zsh, fish or powershell; detected from $SHELL when omitted"
+        )]
+        shell: Option<String>,
+    },
     /// Renew every signed-in account that is due
     Keepalive {
         #[arg(long)]
@@ -279,11 +294,12 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
                      limits,
                      status,
                      balance,
+                     default,
                  }| {
                     json!({
                         "id": account.id, "label": account.label, "harness": account.harness,
                         "auth": describe(account), "model": account.model,
-                        "limits": limits, "status": status, "balance": balance,
+                        "limits": limits, "status": status, "balance": balance, "default": default,
                     })
                 },
             )
@@ -307,6 +323,7 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
         limits,
         status,
         balance,
+        ..
     } in rows
     {
         let limits = limits.unwrap_or_default();
@@ -838,6 +855,43 @@ fn dispatch(store: &Store, action: Action) -> Result<i32> {
             for model in models {
                 println!("{:<34} {}", model.id, model.label);
             }
+        }
+        Action::Default { account, clear } => match (account, clear) {
+            (Some(account), _) => {
+                let chosen = machine::set_default(store, &account)?;
+                println!(
+                    "{} is now the default {} account. New terminals and apps pick it up; run `eval \"$(vvault env)\"` to apply it here.",
+                    chosen.label,
+                    chosen.harness.program()
+                );
+            }
+            (None, Some(harness)) => {
+                machine::clear_default(store, harness)?;
+                println!(
+                    "{} goes back to its own default home in new terminals.",
+                    harness.program()
+                );
+            }
+            (None, None) => {
+                let config = store.load()?;
+                for (harness, id) in &config.defaults {
+                    let label = config
+                        .find(id)
+                        .map(|account| account.label.clone())
+                        .unwrap_or_else(|_| "missing".into());
+                    println!("{harness}: {label}");
+                }
+            }
+        },
+        Action::Env { shell } => {
+            let shell = shell.unwrap_or_else(|| {
+                let path = std::env::var("SHELL").unwrap_or_default();
+                path.rsplit('/').next().unwrap_or("bash").to_string()
+            });
+            print!(
+                "{}",
+                machine::snippet(&shell, &machine::exports(store, &store.load()?))
+            );
         }
         Action::Waybar => waybar(store)?,
         Action::Statusline { account } => statusline(store, &account)?,
