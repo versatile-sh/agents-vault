@@ -28,6 +28,7 @@ pub struct Row {
     pub limits: Option<Limits>,
     pub status: Option<Status>,
     pub balance: Option<Balance>,
+    pub default: bool,
 }
 
 /// A provider with the balance its key reports, when the provider tells.
@@ -119,9 +120,12 @@ pub fn adopt(
 pub fn remove(store: &Store, key: &str, purge: bool) -> Result<(Account, bool)> {
     let removed = store.update(|config| {
         let index = config.position(key)?;
-        Ok(config.accounts.remove(index))
+        let removed = config.accounts.remove(index);
+        config.defaults.retain(|_, id| id != &removed.id);
+        Ok(removed)
     })?;
     let _ = secrets::delete(&removed.id);
+    let _ = crate::machine::apply(store);
     for (kind, extension) in [
         ("limits", "json"),
         ("status", "json"),
@@ -216,6 +220,7 @@ pub fn rows(store: &Store, config: &Config, max_age: i64) -> Vec<Row> {
                     limits,
                     status: status::read(store, &account.id),
                     balance,
+                    default: config.defaults.get(account.harness.program()) == Some(&account.id),
                 }
             })
             .collect()

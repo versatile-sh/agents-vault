@@ -10,6 +10,7 @@ pub mod launch;
 pub mod ledger;
 pub mod limits;
 pub mod login;
+pub mod machine;
 pub mod model;
 pub mod models;
 pub mod proc;

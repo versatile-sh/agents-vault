@@ -360,6 +360,8 @@ pub struct Config {
     #[serde(default)]
     pub grok_kit: Kit,
     #[serde(default)]
+    pub defaults: BTreeMap<String, String>,
+    #[serde(default)]
     pub terminal: Vec<String>,
 }
 
@@ -372,6 +374,7 @@ impl Default for Config {
             claude_kit: Kit::default(),
             codex_kit: Kit::default(),
             grok_kit: Kit::default(),
+            defaults: BTreeMap::new(),
             terminal: Vec::new(),
         }
     }
