@@ -4,9 +4,13 @@ use anyhow::{bail, Result};
 use serde::Serialize;
 use serde_json::{json, Value};
 
+use std::time::Duration;
+
 use crate::codex;
 use crate::http::{get_json, join};
+use crate::launch::harness_command;
 use crate::model::{Account, Auth, Harness, Provider};
+use crate::proc;
 use crate::secrets;
 use crate::store::Store;
 
@@ -22,7 +26,10 @@ pub struct ModelOption {
 }
 
 fn option(id: &str, label: &str) -> ModelOption {
-    ModelOption { id: id.to_string(), label: label.to_string() }
+    ModelOption {
+        id: id.to_string(),
+        label: label.to_string(),
+    }
 }
 
 /// Model aliases Claude Code documents for every subscription.
@@ -50,37 +57,77 @@ fn claude_cached(store: &Store, account: &Account) -> Vec<ModelOption> {
     let state: Option<Value> = claude_state(store, account)
         .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|raw| serde_json::from_str(&raw).ok());
-    let entries = state.as_ref().and_then(|state| state.get("additionalModelOptionsCache")?.as_array().cloned());
+    let entries = state.as_ref().and_then(|state| {
+        state
+            .get("additionalModelOptionsCache")?
+            .as_array()
+            .cloned()
+    });
     entries
         .unwrap_or_default()
         .iter()
         .filter_map(|entry| {
             let id = entry.get("value")?.as_str()?;
-            let label = entry.get("description").or(entry.get("label")).and_then(Value::as_str).unwrap_or(id);
+            let label = entry
+                .get("description")
+                .or(entry.get("label"))
+                .and_then(Value::as_str)
+                .unwrap_or(id);
             Some(option(id, label.split(" · ").next().unwrap_or(label)))
         })
         .collect()
 }
 
 fn parse_codex(result: &Value) -> Vec<ModelOption> {
-    let entries = result.get("data").and_then(Value::as_array).cloned().unwrap_or_default();
+    let entries = result
+        .get("data")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     entries
         .iter()
         .filter(|entry| entry.get("hidden").and_then(Value::as_bool) != Some(true))
         .filter_map(|entry| {
             let id = entry.get("model").or(entry.get("id"))?.as_str()?;
-            Some(option(id, entry.get("displayName").and_then(Value::as_str).unwrap_or(id)))
+            Some(option(
+                id,
+                entry
+                    .get("displayName")
+                    .and_then(Value::as_str)
+                    .unwrap_or(id),
+            ))
         })
         .collect()
 }
 
+fn parse_grok(output: &str) -> Vec<ModelOption> {
+    output
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("* ")
+                .or_else(|| line.trim().strip_prefix("- "))
+        })
+        .filter_map(|entry| entry.split_whitespace().next())
+        .map(|id| option(id, id))
+        .collect()
+}
+
 fn parse_listing(payload: &Value) -> Vec<ModelOption> {
-    let entries = payload.get("data").and_then(Value::as_array).cloned().unwrap_or_default();
+    let entries = payload
+        .get("data")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     entries
         .iter()
         .filter_map(|entry| {
             let id = entry.get("id")?.as_str()?;
-            let label = entry.get("display_name").or(entry.get("name")).and_then(Value::as_str).unwrap_or(id);
+            let label = entry
+                .get("display_name")
+                .or(entry.get("name"))
+                .and_then(Value::as_str)
+                .unwrap_or(id);
             Some(option(id, label))
         })
         .take(1000)
@@ -88,15 +135,34 @@ fn parse_listing(payload: &Value) -> Vec<ModelOption> {
 }
 
 /// Asks an API endpoint which models a key can use.
-pub fn remote(harness: Harness, base_url: Option<&str>, bearer: bool, key: &str) -> Result<Vec<ModelOption>> {
+pub fn remote(
+    harness: Harness,
+    base_url: Option<&str>,
+    bearer: bool,
+    key: &str,
+) -> Result<Vec<ModelOption>> {
     let authorization = format!("Bearer {key}");
     let payload = match harness {
         Harness::Claude => {
-            let url = join(base_url.unwrap_or(ANTHROPIC_ENDPOINT), "v1/models?limit=1000");
-            let credential = if bearer { ("Authorization", authorization.as_str()) } else { ("x-api-key", key) };
-            get_json(&url, &[credential, ("anthropic-version", ANTHROPIC_VERSION)])?
+            let url = join(
+                base_url.unwrap_or(ANTHROPIC_ENDPOINT),
+                "v1/models?limit=1000",
+            );
+            let credential = if bearer {
+                ("Authorization", authorization.as_str())
+            } else {
+                ("x-api-key", key)
+            };
+            get_json(
+                &url,
+                &[credential, ("anthropic-version", ANTHROPIC_VERSION)],
+            )?
         }
-        Harness::Codex => get_json(&join(base_url.unwrap_or(OPENAI_ENDPOINT), "models"), &[("Authorization", &authorization)])?,
+        Harness::Codex => get_json(
+            &join(base_url.unwrap_or(OPENAI_ENDPOINT), "models"),
+            &[("Authorization", &authorization)],
+        )?,
+        Harness::Grok => bail!("Grok lists its own models"),
     };
     let models = parse_listing(&payload);
     if models.is_empty() {
@@ -117,9 +183,22 @@ pub fn for_account(store: &Store, account: &Account) -> Result<Vec<ModelOption>>
             }
             Ok(models)
         }
-        (Auth::Login, Harness::Codex) => Ok(parse_codex(&codex::request(store, account, "model/list", json!({}))?)),
+        (Auth::Login, Harness::Codex) => Ok(parse_codex(&codex::request(
+            store,
+            account,
+            "model/list",
+            json!({}),
+        )?)),
+        (_, Harness::Grok) => {
+            let mut command = harness_command(store, account)?;
+            command.arg("models");
+            Ok(parse_grok(
+                &proc::run(command, Duration::from_secs(60))?.stdout,
+            ))
+        }
         (Auth::ApiKey { base_url, bearer }, harness) => {
-            let key = secrets::get(&account.id)?.ok_or_else(|| anyhow::anyhow!("no API key saved for this account"))?;
+            let key = secrets::get(&account.id)?
+                .ok_or_else(|| anyhow::anyhow!("no API key saved for this account"))?;
             remote(harness, base_url.as_deref(), *bearer, &key)
         }
     }
@@ -132,7 +211,7 @@ pub fn for_harness(store: &Store, harness: Harness) -> Result<Vec<ModelOption>> 
     account.home = harness.native_home();
     match harness {
         Harness::Claude => Ok(claude_aliases()),
-        Harness::Codex => for_account(store, &account),
+        Harness::Codex | Harness::Grok => for_account(store, &account),
     }
 }
 
@@ -159,6 +238,18 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_grok_model_listing() {
+        let output = "You are not authenticated.\n\nDefault model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)\n  - grok-4.5\n";
+        assert_eq!(
+            parse_grok(output),
+            vec![
+                option("grok-4.6", "grok-4.6"),
+                option("grok-4.5", "grok-4.5")
+            ]
+        );
+    }
+
+    #[test]
     fn reads_api_listings_from_either_naming() {
         let models = parse_listing(&json!({ "data": [
             { "id": "claude-x", "display_name": "Claude X" },
@@ -166,7 +257,14 @@ mod tests {
             { "id": "bare" },
             { "name": "no id" }
         ]}));
-        assert_eq!(models, vec![option("claude-x", "Claude X"), option("vendor/y", "Vendor: Y"), option("bare", "bare")]);
+        assert_eq!(
+            models,
+            vec![
+                option("claude-x", "Claude X"),
+                option("vendor/y", "Vendor: Y"),
+                option("bare", "bare")
+            ]
+        );
     }
 
     #[test]
@@ -182,6 +280,9 @@ mod tests {
         .unwrap();
         let models = for_account(&store, &account).unwrap();
         assert_eq!(models.len(), claude_aliases().len() + 1);
-        assert_eq!(models.last(), Some(&option("claude-fable-5-2[1m]", "Fable 5.2")));
+        assert_eq!(
+            models.last(),
+            Some(&option("claude-fable-5-2[1m]", "Fable 5.2"))
+        );
     }
 }

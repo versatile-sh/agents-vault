@@ -26,9 +26,15 @@ pub fn token(home: &Path) -> Option<Token> {
     let raw = std::fs::read_to_string(home.join(".credentials.json")).ok()?;
     let json: Value = serde_json::from_str(&raw).ok()?;
     let login = json.get("claudeAiOauth")?;
-    let access = login.get("accessToken")?.as_str().filter(|token| !token.is_empty())?;
+    let access = login
+        .get("accessToken")?
+        .as_str()
+        .filter(|token| !token.is_empty())?;
     let expires_at = login.get("expiresAt").and_then(Value::as_i64).unwrap_or(0) / 1000;
-    Some(Token { access: access.to_string(), expires_at })
+    Some(Token {
+        access: access.to_string(),
+        expires_at,
+    })
 }
 
 /// Token that is still valid, asking Claude Code to renew its own session first when it lapsed.
@@ -42,12 +48,17 @@ pub fn fresh_token(store: &Store, account: &Account) -> Result<Token> {
     let mut command = harness_command(store, account)?;
     command.args(["auth", "status"]);
     proc::run(command, Duration::from_secs(120))?;
-    token(&home).filter(live).context("the sign-in expired; sign in again")
+    token(&home)
+        .filter(live)
+        .context("the sign-in expired; sign in again")
 }
 
 fn get(url: &str, token: &str) -> Result<Value> {
     let authorization = format!("Bearer {token}");
-    get_json(url, &[("Authorization", &authorization), ("anthropic-beta", BETA)])
+    get_json(
+        url,
+        &[("Authorization", &authorization), ("anthropic-beta", BETA)],
+    )
 }
 
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
@@ -84,14 +95,31 @@ pub fn parse_time(text: &str) -> Option<i64> {
 }
 
 fn window(payload: &Value, names: &[&str]) -> Option<Window> {
-    let bucket = names.iter().filter_map(|name| payload.get(name)).find(|bucket| bucket.is_object())?;
-    let percent = bucket.get("utilization")?.as_f64().filter(|value| value.is_finite())?;
-    let resets_at = bucket.get("resets_at").and_then(Value::as_str).and_then(parse_time);
-    Some(Window { percent: percent.clamp(0.0, 100.0), resets_at })
+    let bucket = names
+        .iter()
+        .filter_map(|name| payload.get(name))
+        .find(|bucket| bucket.is_object())?;
+    let percent = bucket
+        .get("utilization")?
+        .as_f64()
+        .filter(|value| value.is_finite())?;
+    let resets_at = bucket
+        .get("resets_at")
+        .and_then(Value::as_str)
+        .and_then(parse_time);
+    Some(Window {
+        percent: percent.clamp(0.0, 100.0),
+        resets_at,
+    })
 }
 
 fn parse_usage(payload: &Value) -> Limits {
-    let idle = || Some(Window { percent: 0.0, resets_at: None });
+    let idle = || {
+        Some(Window {
+            percent: 0.0,
+            resets_at: None,
+        })
+    };
     Limits {
         session: window(payload, &["five_hour"]).or_else(idle),
         weekly: window(payload, &["seven_day_oauth_apps", "seven_day"]).or_else(idle),
@@ -149,7 +177,10 @@ mod tests {
     #[test]
     fn parses_timestamps_with_fractions_and_offsets() {
         assert_eq!(parse_time("1970-01-01T00:00:00Z"), Some(0));
-        assert_eq!(parse_time("2026-11-18T04:59:59.940912+00:00"), Some(1_794_977_999));
+        assert_eq!(
+            parse_time("2026-11-18T04:59:59.940912+00:00"),
+            Some(1_794_977_999)
+        );
         assert_eq!(parse_time("2026-11-18T01:59:59-03:00"), Some(1_794_977_999));
         assert_eq!(parse_time("2000-03-01T00:00:00Z"), Some(951_868_800));
         assert_eq!(parse_time("2024-02-29T12:00:00Z"), Some(1_709_208_000));
@@ -162,15 +193,30 @@ mod tests {
             "five_hour": null,
             "seven_day": { "utilization": 46.0, "resets_at": "2026-11-18T04:59:59.940912+00:00" }
         }));
-        assert_eq!(limits.session, Some(Window { percent: 0.0, resets_at: None }));
-        assert_eq!(limits.weekly, Some(Window { percent: 46.0, resets_at: Some(1_794_977_999) }));
+        assert_eq!(
+            limits.session,
+            Some(Window {
+                percent: 0.0,
+                resets_at: None
+            })
+        );
+        assert_eq!(
+            limits.weekly,
+            Some(Window {
+                percent: 46.0,
+                resets_at: Some(1_794_977_999)
+            })
+        );
     }
 
     #[test]
     fn prefers_the_display_name_of_the_plan() {
         let payload = json!({ "organization": { "plan_display_name": " Ultra ", "plan_display_label": "x" } });
         assert_eq!(parse_plan(&payload).as_deref(), Some("Ultra"));
-        assert_eq!(parse_plan(&json!({ "organization": { "plan_display_name": "" } })), None);
+        assert_eq!(
+            parse_plan(&json!({ "organization": { "plan_display_name": "" } })),
+            None
+        );
     }
 
     #[test]
@@ -190,6 +236,9 @@ mod tests {
         )
         .unwrap();
         let saved = token(directory.path()).unwrap();
-        assert_eq!((saved.access.as_str(), saved.expires_at), ("abc", 1_700_000_000));
+        assert_eq!(
+            (saved.access.as_str(), saved.expires_at),
+            ("abc", 1_700_000_000)
+        );
     }
 }

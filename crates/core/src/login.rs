@@ -35,9 +35,12 @@ pub fn start(store: &Store, config: &Config, account: &Account) -> Result<Sessio
     let mut command = harness_command(store, account)?;
     match account.harness {
         Harness::Claude => command.args(["auth", "login"]),
-        Harness::Codex => command.arg("login"),
+        Harness::Codex | Harness::Grok => command.arg("login"),
     };
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
     let mut child = command.spawn().context("could not start the sign-in")?;
     let stdout = child.stdout.take().context("missing stdout pipe")?;
     let url = Arc::new(Mutex::new(None));
@@ -49,7 +52,11 @@ pub fn start(store: &Store, config: &Config, account: &Account) -> Result<Sessio
             }
         }
     });
-    Ok(Session { stdin: child.stdin.take(), child, url })
+    Ok(Session {
+        stdin: child.stdin.take(),
+        child,
+        url,
+    })
 }
 
 impl Session {
@@ -64,7 +71,10 @@ impl Session {
         if code.is_empty() || code.chars().any(char::is_control) {
             bail!("paste the code shown on the sign-in page");
         }
-        let stdin = self.stdin.as_mut().context("the sign-in is no longer waiting for a code")?;
+        let stdin = self
+            .stdin
+            .as_mut()
+            .context("the sign-in is no longer waiting for a code")?;
         writeln!(stdin, "{code}")?;
         stdin.flush()?;
         Ok(())
@@ -125,8 +135,14 @@ mod tests {
     #[test]
     fn finds_the_sign_in_page_inside_a_terminal_hyperlink() {
         let line = "If the browser didn't open, visit: \u{1b}]8;;https://claude.com/cai/oauth/authorize?code=true&state=abc\u{1b}\\https://claude.com/x";
-        assert_eq!(find_url(line).as_deref(), Some("https://claude.com/cai/oauth/authorize?code=true&state=abc"));
-        assert_eq!(find_url("Starting local login server on http://localhost:1455."), None);
+        assert_eq!(
+            find_url(line).as_deref(),
+            Some("https://claude.com/cai/oauth/authorize?code=true&state=abc")
+        );
+        assert_eq!(
+            find_url("Starting local login server on http://localhost:1455."),
+            None
+        );
         assert_eq!(find_url("https://"), None);
     }
 

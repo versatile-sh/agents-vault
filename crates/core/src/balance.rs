@@ -39,7 +39,11 @@ fn parse_deepseek(payload: &Value) -> Option<Balance> {
     let remaining = total.as_f64().or_else(|| total.as_str()?.parse().ok())?;
     Some(Balance {
         remaining: Some(remaining),
-        currency: info.get("currency").and_then(Value::as_str).unwrap_or("USD").to_string(),
+        currency: info
+            .get("currency")
+            .and_then(Value::as_str)
+            .unwrap_or("USD")
+            .to_string(),
         captured_at: now(),
         ..Balance::default()
     })
@@ -54,8 +58,13 @@ fn fetch(endpoint: &str, key: &str) -> Result<Option<Balance>> {
     let authorization = format!("Bearer {key}");
     let headers = [("Authorization", authorization.as_str())];
     Ok(match host(endpoint) {
-        "openrouter.ai" => parse_openrouter(&get_json("https://openrouter.ai/api/v1/key", &headers)?),
-        "api.deepseek.com" => parse_deepseek(&get_json("https://api.deepseek.com/user/balance", &headers)?),
+        "openrouter.ai" => {
+            parse_openrouter(&get_json("https://openrouter.ai/api/v1/key", &headers)?)
+        }
+        "api.deepseek.com" => parse_deepseek(&get_json(
+            "https://api.deepseek.com/user/balance",
+            &headers,
+        )?),
         _ => None,
     })
 }
@@ -65,7 +74,10 @@ pub fn current(store: &Store, id: &str, endpoint: Option<&str>, max_age: i64) ->
     let endpoint = endpoint.filter(|endpoint| supported(endpoint))?;
     let path = store.cache("balance", id, "json").ok()?;
     let cached: Option<Balance> = read_json(&path);
-    if cached.as_ref().is_some_and(|balance| now() - balance.captured_at < max_age.max(FRESH_SECONDS)) {
+    if cached
+        .as_ref()
+        .is_some_and(|balance| now() - balance.captured_at < max_age.max(FRESH_SECONDS))
+    {
         return cached;
     }
     let key = crate::secrets::get(id).ok().flatten()?;
@@ -85,9 +97,18 @@ mod tests {
 
     #[test]
     fn reads_openrouter_key_spending() {
-        let balance = parse_openrouter(&json!({ "data": { "usage": 12.5, "limit": 50, "limit_remaining": 37.5 } })).unwrap();
-        assert_eq!((balance.used, balance.limit, balance.remaining), (Some(12.5), Some(50.0), Some(37.5)));
-        let open = parse_openrouter(&json!({ "data": { "usage": 3.0, "limit": null, "limit_remaining": null } })).unwrap();
+        let balance = parse_openrouter(
+            &json!({ "data": { "usage": 12.5, "limit": 50, "limit_remaining": 37.5 } }),
+        )
+        .unwrap();
+        assert_eq!(
+            (balance.used, balance.limit, balance.remaining),
+            (Some(12.5), Some(50.0), Some(37.5))
+        );
+        let open = parse_openrouter(
+            &json!({ "data": { "usage": 3.0, "limit": null, "limit_remaining": null } }),
+        )
+        .unwrap();
         assert_eq!((open.used, open.limit), (Some(3.0), None));
     }
 
@@ -98,7 +119,10 @@ mod tests {
             { "currency": "USD", "total_balance": "110.00" }
         ]}))
         .unwrap();
-        assert_eq!((balance.remaining, balance.currency.as_str()), (Some(110.0), "USD"));
+        assert_eq!(
+            (balance.remaining, balance.currency.as_str()),
+            (Some(110.0), "USD")
+        );
     }
 
     #[test]

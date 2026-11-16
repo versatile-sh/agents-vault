@@ -133,12 +133,16 @@ pub fn current(store: &Store, account: &Account, max_age: i64) -> Option<Limits>
         return None;
     }
     let cached = read(store, &account.id);
-    if cached.as_ref().is_some_and(|limits| now() - limits.captured_at < max_age.max(MIN_PROBE_GAP)) {
+    if cached
+        .as_ref()
+        .is_some_and(|limits| now() - limits.captured_at < max_age.max(MIN_PROBE_GAP))
+    {
         return cached;
     }
     let probed = match account.harness {
         Harness::Claude => probe_claude(store, account),
         Harness::Codex => probe_codex(store, account),
+        Harness::Grok => return None,
     };
     probed.ok().or(cached)
 }

@@ -38,7 +38,9 @@ fn parse_claude(stdout: &str) -> Status {
     Status {
         logged_in: json.get("loggedIn").and_then(Value::as_bool) == Some(true),
         email: text("email"),
-        plan: text("planTier").map(|tier| claude::tier_label(&tier)).or_else(|| text("subscriptionType")),
+        plan: text("planTier")
+            .map(|tier| claude::tier_label(&tier))
+            .or_else(|| text("subscriptionType")),
         checked_at: now(),
     }
 }
@@ -72,9 +74,23 @@ pub fn check(store: &Store, account: &Account) -> Result<Status> {
             status
         }
         Harness::Codex => {
-            let reply = codex::request(store, account, "account/read", json!({ "refreshToken": false }))?;
+            let reply = codex::request(
+                store,
+                account,
+                "account/read",
+                json!({ "refreshToken": false }),
+            )?;
             let _ = limits::probe_codex(store, account);
             parse_codex(&reply)
+        }
+        Harness::Grok => {
+            command.arg("models");
+            let output = proc::run(command, Duration::from_secs(60))?;
+            Status {
+                logged_in: output.success && !output.stdout.contains("not authenticated"),
+                checked_at: now(),
+                ..Status::default()
+            }
         }
     };
     write_json(&store.cache("status", &account.id, "json")?, &status)?;
@@ -147,7 +163,9 @@ mod tests {
         assert!(status.logged_in);
         assert_eq!(status.email.as_deref(), Some("a@b.c"));
         assert_eq!(status.plan.as_deref(), Some("max"));
-        let tiered = parse_claude("{\"loggedIn\":true,\"subscriptionType\":\"max\",\"planTier\":\"max_20x\"}");
+        let tiered = parse_claude(
+            "{\"loggedIn\":true,\"subscriptionType\":\"max\",\"planTier\":\"max_20x\"}",
+        );
         assert_eq!(tiered.plan.as_deref(), Some("Max 20x"));
     }
 
@@ -159,9 +177,14 @@ mod tests {
 
     #[test]
     fn reads_codex_account_and_treats_no_account_as_signed_out() {
-        let status = parse_codex(&json!({ "account": { "type": "chatgpt", "email": "a@b.c", "planType": "plus" } }));
+        let status = parse_codex(
+            &json!({ "account": { "type": "chatgpt", "email": "a@b.c", "planType": "plus" } }),
+        );
         assert!(status.logged_in);
-        assert_eq!((status.email.as_deref(), status.plan.as_deref()), (Some("a@b.c"), Some("Plus")));
+        assert_eq!(
+            (status.email.as_deref(), status.plan.as_deref()),
+            (Some("a@b.c"), Some("Plus"))
+        );
         assert!(!parse_codex(&json!({ "account": null })).logged_in);
     }
 }

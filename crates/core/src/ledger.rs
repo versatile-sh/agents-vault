@@ -122,7 +122,12 @@ pub fn remove(store: &Store, key: &str, purge: bool) -> Result<(Account, bool)> 
         Ok(config.accounts.remove(index))
     })?;
     let _ = secrets::delete(&removed.id);
-    for (kind, extension) in [("limits", "json"), ("status", "json"), ("status", "lock"), ("balance", "json")] {
+    for (kind, extension) in [
+        ("limits", "json"),
+        ("status", "json"),
+        ("status", "lock"),
+        ("balance", "json"),
+    ] {
         if let Ok(path) = store.cache(kind, &removed.id, extension) {
             let _ = std::fs::remove_file(path);
         }
@@ -178,7 +183,9 @@ pub fn remove_provider(store: &Store, key: &str, purge: bool) -> Result<(Provide
 
 fn account_balance(store: &Store, account: &Account, max_age: i64) -> Option<Balance> {
     match &account.auth {
-        Auth::ApiKey { base_url, .. } => balance::current(store, &account.id, base_url.as_deref(), max_age),
+        Auth::ApiKey { base_url, .. } => {
+            balance::current(store, &account.id, base_url.as_deref(), max_age)
+        }
         Auth::Login => None,
     }
 }
@@ -190,7 +197,12 @@ pub fn rows(store: &Store, config: &Config, max_age: i64) -> Vec<Row> {
             .accounts
             .iter()
             .map(|account| {
-                scope.spawn(move || (limits::current(store, account, max_age), account_balance(store, account, max_age)))
+                scope.spawn(move || {
+                    (
+                        limits::current(store, account, max_age),
+                        account_balance(store, account, max_age),
+                    )
+                })
             })
             .collect();
         config
@@ -199,7 +211,12 @@ pub fn rows(store: &Store, config: &Config, max_age: i64) -> Vec<Row> {
             .zip(handles)
             .map(|(account, handle)| {
                 let (limits, balance) = handle.join().unwrap_or((None, None));
-                Row { account: account.clone(), limits, status: status::read(store, &account.id), balance }
+                Row {
+                    account: account.clone(),
+                    limits,
+                    status: status::read(store, &account.id),
+                    balance,
+                }
             })
             .collect()
     })
@@ -213,7 +230,10 @@ pub fn provider_rows(store: &Store, config: &Config, max_age: i64) -> Vec<Provid
             .iter()
             .map(|provider| {
                 scope.spawn(move || {
-                    let endpoint = provider.openai_url.as_deref().or(provider.anthropic_url.as_deref());
+                    let endpoint = provider
+                        .openai_url
+                        .as_deref()
+                        .or(provider.anthropic_url.as_deref());
                     balance::current(store, &provider.id, endpoint, max_age)
                 })
             })
@@ -222,7 +242,10 @@ pub fn provider_rows(store: &Store, config: &Config, max_age: i64) -> Vec<Provid
             .providers
             .iter()
             .zip(handles)
-            .map(|(provider, handle)| ProviderRow { provider: provider.clone(), balance: handle.join().ok().flatten() })
+            .map(|(provider, handle)| ProviderRow {
+                provider: provider.clone(),
+                balance: handle.join().ok().flatten(),
+            })
             .collect()
     })
 }

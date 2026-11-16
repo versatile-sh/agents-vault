@@ -48,9 +48,19 @@ pub fn request(store: &Store, account: &Account, method: &str, params: Value) ->
         }
     };
     let info = json!({ "clientInfo": { "name": "vvault", "version": env!("CARGO_PKG_VERSION") } });
-    let outcome = send(json!({ "id": 1, "method": "initialize", "params": info }), Some(1), 10)
-        .and_then(|_| send(json!({ "method": "initialized", "params": {} }), None, 0))
-        .and_then(|_| send(json!({ "id": 2, "method": method, "params": params }), Some(2), 15));
+    let outcome = send(
+        json!({ "id": 1, "method": "initialize", "params": info }),
+        Some(1),
+        10,
+    )
+    .and_then(|_| send(json!({ "method": "initialized", "params": {} }), None, 0))
+    .and_then(|_| {
+        send(
+            json!({ "id": 2, "method": method, "params": params }),
+            Some(2),
+            15,
+        )
+    });
     let _ = child.kill();
     let _ = child.wait();
     outcome
