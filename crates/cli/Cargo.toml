@@ -1,16 +1,16 @@
 [package]
-name = "cofre"
+name = "vvault"
 description = "One ledger for every Claude Code and Codex account, key and router"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "cofre"
+name = "vvault"
 path = "src/main.rs"
 
 [dependencies]
-cofre-core = { path = "../core" }
+vvault-core = { path = "../core" }
 anyhow.workspace = true
 serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }

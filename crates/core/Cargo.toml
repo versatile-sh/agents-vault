@@ -1,5 +1,5 @@
 [package]
-name = "cofre-core"
+name = "vvault-core"
 description = "Account ledger core for coding agent harnesses"
 version.workspace = true
 edition.workspace = true

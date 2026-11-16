@@ -16,11 +16,11 @@ pub struct Store {
 }
 
 impl Store {
-    /// Opens the ledger at `COFRE_HOME` or the platform data directory.
+    /// Opens the ledger at `VVAULT_HOME` or the platform data directory.
     pub fn open() -> Result<Self> {
-        let root = match std::env::var_os("COFRE_HOME") {
+        let root = match std::env::var_os("VVAULT_HOME") {
             Some(path) if !path.is_empty() => PathBuf::from(path),
-            _ => directories::ProjectDirs::from("dev", "cofre", "cofre")
+            _ => directories::ProjectDirs::from("sh", "versatile", "vvault")
                 .context("could not resolve a data directory for this user")?
                 .data_dir()
                 .to_path_buf(),

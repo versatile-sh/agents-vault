@@ -9,7 +9,7 @@ use crate::model::{Account, Auth, Harness, Provider, Tool};
 use crate::store::Store;
 
 /// Environment variable carrying a Codex provider key into the child process.
-pub const KEY_ENV: &str = "COFRE_API_KEY";
+pub const KEY_ENV: &str = "VVAULT_API_KEY";
 
 const OPENAI_ENDPOINT: &str = "https://api.openai.com/v1";
 
@@ -107,7 +107,7 @@ pub fn plan(
     store.ensure_home(account)?;
     let mut env = home_env(store, account);
     let mut args = isolation_args(account);
-    let key = || secret.context("this account has no API key saved; run `cofre key` to set one");
+    let key = || secret.context("this account has no API key saved; run `vvault key` to set one");
     match (account.harness, &account.auth) {
         (Harness::Claude, Auth::Login) => {
             let command = format!("{} statusline {}", shell_quote(cli), account.id);
@@ -149,11 +149,11 @@ pub fn plan(
             env.insert(KEY_ENV.into(), key()?.to_string());
             let url = base_url.as_deref().unwrap_or(OPENAI_ENDPOINT);
             for (name, value) in [
-                ("model_provider", "cofre".to_string()),
-                ("model_providers.cofre.name", account.label.clone()),
-                ("model_providers.cofre.base_url", url.to_string()),
-                ("model_providers.cofre.env_key", KEY_ENV.to_string()),
-                ("model_providers.cofre.wire_api", "responses".to_string()),
+                ("model_provider", "vvault".to_string()),
+                ("model_providers.vvault.name", account.label.clone()),
+                ("model_providers.vvault.base_url", url.to_string()),
+                ("model_providers.vvault.env_key", KEY_ENV.to_string()),
+                ("model_providers.vvault.wire_api", "responses".to_string()),
             ] {
                 args.extend(["-c".to_string(), format!("{name}={}", toml_string(&value))]);
             }
@@ -243,7 +243,7 @@ pub fn plan_provider(
         Tool::Codex => Harness::Codex,
         Tool::Shell => {
             let key = secret.context(
-                "this provider has no API key saved; run `cofre provider key` to set one",
+                "this provider has no API key saved; run `vvault provider key` to set one",
             )?;
             let mut env = BTreeMap::from([(provider.key_env.clone(), key.to_string())]);
             if let Some(url) = &provider.openai_url {
@@ -298,7 +298,7 @@ mod tests {
 
     fn planned(account: &Account, secret: Option<&str>) -> Result<Launch> {
         let (_guard, store) = store();
-        let cli = PathBuf::from("/opt/it's here/cofre");
+        let cli = PathBuf::from("/opt/it's here/vvault");
         plan(&store, account, secret, &cli, &["--resume".to_string()])
     }
 
@@ -320,7 +320,7 @@ mod tests {
         let command = settings["statusLine"]["command"].as_str().unwrap();
         assert_eq!(
             command,
-            format!("'/opt/it'\\''s here/cofre' statusline {}", account.id)
+            format!("'/opt/it'\\''s here/vvault' statusline {}", account.id)
         );
         assert_eq!(launch.args.last().unwrap(), "--resume");
         assert!(!launch.env.contains_key("ANTHROPIC_API_KEY"));
@@ -358,7 +358,7 @@ mod tests {
         };
         let account = Account::new("bare", Harness::Claude, auth).unwrap();
         let (_guard, store) = store();
-        let error = plan(&store, &account, None, Path::new("cofre"), &[]).unwrap_err();
+        let error = plan(&store, &account, None, Path::new("vvault"), &[]).unwrap_err();
         assert!(error.to_string().contains("no API key"));
     }
 
@@ -378,9 +378,9 @@ mod tests {
         assert!(launch.env["CODEX_HOME"].ends_with(&account.id));
         let joined = launch.args.join(" ");
         assert!(joined.contains("cli_auth_credentials_store=\"file\""));
-        assert!(joined.contains("model_providers.cofre.env_key=\"COFRE_API_KEY\""));
-        assert!(joined.contains("model_providers.cofre.base_url=\"https://api.openai.com/v1\""));
-        assert!(joined.contains("model_providers.cofre.name=\"my \\\"api\\\"\""));
+        assert!(joined.contains("model_providers.vvault.env_key=\"VVAULT_API_KEY\""));
+        assert!(joined.contains("model_providers.vvault.base_url=\"https://api.openai.com/v1\""));
+        assert!(joined.contains("model_providers.vvault.name=\"my \\\"api\\\"\""));
         assert!(joined.contains("-m gpt-5"));
         assert!(!joined.contains("sk-secret"));
     }
@@ -449,7 +449,7 @@ mod tests {
             Tool::Claude,
             Some("deepseek-reasoner"),
             Some("sk-secret"),
-            Path::new("cofre"),
+            Path::new("vvault"),
             &[],
         )
         .unwrap();
@@ -484,7 +484,7 @@ mod tests {
             Tool::Codex,
             None,
             Some("k"),
-            Path::new("cofre"),
+            Path::new("vvault"),
             &[],
         )
         .unwrap_err();
@@ -500,7 +500,7 @@ mod tests {
             Tool::Shell,
             None,
             Some("sk-secret"),
-            Path::new("cofre"),
+            Path::new("vvault"),
             &[],
         )
         .unwrap();
