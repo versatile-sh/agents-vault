@@ -1,14 +1,17 @@
 //! Account ledger core: one isolated home per account, secrets in the OS keychain,
 //! and the harness CLI as the only owner of its own OAuth tokens.
 
+pub mod balance;
 pub mod claude;
 pub mod codex;
+pub mod http;
 pub mod kit;
 pub mod launch;
 pub mod ledger;
 pub mod login;
 pub mod limits;
 pub mod model;
+pub mod models;
 pub mod proc;
 pub mod secrets;
 pub mod status;

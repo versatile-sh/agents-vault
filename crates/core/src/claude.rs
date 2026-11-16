@@ -4,6 +4,7 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
+use crate::http::get_json;
 use crate::launch::harness_command;
 use crate::limits::{Limits, Window};
 use crate::model::Account;
@@ -45,19 +46,8 @@ pub fn fresh_token(store: &Store, account: &Account) -> Result<Token> {
 }
 
 fn get(url: &str, token: &str) -> Result<Value> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(10)))
-        .max_redirects(0)
-        .build()
-        .into();
-    let mut response = agent
-        .get(url)
-        .header("Authorization", &format!("Bearer {token}"))
-        .header("anthropic-beta", BETA)
-        .header("Accept", "application/json")
-        .call()
-        .map_err(|error| anyhow::anyhow!("the account endpoint did not answer: {error}"))?;
-    response.body_mut().read_json::<Value>().context("the account endpoint sent an unreadable answer")
+    let authorization = format!("Bearer {token}");
+    get_json(url, &[("Authorization", &authorization), ("anthropic-beta", BETA)])
 }
 
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
