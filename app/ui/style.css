@@ -290,6 +290,12 @@ main::before {
 }
 
 .tool { padding: 0 15px; }
+.tool.main { border-color: transparent; background: var(--paper); color: var(--ink); font-weight: 500; }
+.tool.main:hover { border-color: transparent; background: #fff; }
+.tool.on { border-color: rgb(245 245 242 / 0.6); background: rgb(245 245 242 / 0.1); }
+.tool.main + .tool { margin-left: auto; }
+.provider > .meters { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-right: 10px; }
+.provider > .meters .plain { text-align: left; }
 .tool:hover, .launch select:hover { border-color: rgb(245 245 242 / 0.6); }
 .tool:active { transform: scale(0.96); }
 
@@ -488,3 +494,4 @@ summary:hover { color: var(--paper); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+.provider > .more { align-self: start; margin-top: 3px; }

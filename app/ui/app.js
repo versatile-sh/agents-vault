@@ -162,19 +162,33 @@ function meters(row) {
 
 function accountRow(row) {
   const info = subtitle(row);
-  const launch = () => act(() => invoke("open_account", { id: row.id }), `Opened ${row.label}`);
-  const open = element("button", { type: "button", class: "open", title: `Open ${row.label} in a terminal` }, [
+  const command = row.harness;
+  const head = element("div", { class: "head" }, [
     element("span", { class: "badge", text: BADGES[row.harness] }),
     element("span", { class: "who" }, [
       element("strong", { text: row.label }),
       element("span", { text: info.text, class: info.alert ? "alert" : "" }),
     ]),
-    element("span", { class: "meters" }, meters(row)),
   ]);
-  const go = element("button", { type: "button", class: "quiet go", text: "Open", tabindex: "-1" });
-  open.addEventListener("click", launch);
-  go.addEventListener("click", launch);
-  return element("li", { class: "row" }, [open, go, moreButton(row.label, () => edit(row))]);
+  const open = element("button", { type: "button", class: "tool main", text: "Open terminal", title: `Open a terminal on ${row.label}` });
+  open.addEventListener("click", () => act(() => invoke("open_account", { id: row.id }), `Opened ${row.label}`));
+  const launch = element("div", { class: "launch" }, [open]);
+  if (row.auth.kind === "login") {
+    const everywhere = element("button", {
+      type: "button",
+      class: row.default ? "tool on" : "tool",
+      text: row.default ? "Default on this machine" : "Use on this machine",
+      title: row.default ? `Plain \`${command}\` uses this account. Click to stop.` : `Make plain \`${command}\` use this account in new terminals and apps`,
+      "aria-pressed": String(row.default),
+    });
+    everywhere.addEventListener("click", async () => {
+      const on = !row.default;
+      await act(() => invoke("set_default", { id: row.id, on }), on ? `New terminals now use ${row.label} for ${command}` : `${command} is back to its own default`);
+      load();
+    });
+    launch.append(everywhere);
+  }
+  return element("li", { class: "row provider" }, [head, moreButton(row.label, () => edit(row)), element("div", { class: "meters" }, meters(row)), launch]);
 }
 
 function toolsOf(provider) {
