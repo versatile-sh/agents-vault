@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Cofre</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <h1><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="1.6" class="hub"/><path d="M12 3.8v16.4M4.9 7.9l14.2 8.2M4.9 16.1l14.2-8.2"/></svg>Cofre</h1>
+  <div class="bar-actions">
+    <button type="button" id="refresh" class="ghost" title="Refresh limits" aria-label="Refresh limits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg></button>
+    <button type="button" id="open-settings" class="ghost" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <ul id="accounts" class="accounts" aria-label="Accounts"></ul>
+  <section id="empty" class="empty" hidden>
+    <h2>No accounts yet</h2>
+    <p>Each account gets its own isolated home, so sessions never overwrite each other. Keys stay in your system keychain.</p>
+    <button type="button" class="primary" data-open="add">Add an account</button>
+  </section>
+</main>
+
+<footer class="foot">
+  <button type="button" class="primary" data-open="add">Add account</button>
+  <p id="notice" class="notice" role="status" aria-live="polite"></p>
+</footer>
+
+<dialog id="add" aria-labelledby="add-title">
+  <form method="dialog" id="add-form">
+    <h2 id="add-title">Add account</h2>
+    <fieldset class="segmented" aria-label="Harness">
+      <label><input type="radio" name="harness" value="claude" checked><span>Claude Code</span></label>
+      <label><input type="radio" name="harness" value="codex"><span>Codex</span></label>
+    </fieldset>
+    <fieldset class="segmented" aria-label="How it signs in">
+      <label><input type="radio" name="mode" value="login" checked><span>Sign in</span></label>
+      <label><input type="radio" name="mode" value="key"><span>API key / router</span></label>
+      <label><input type="radio" name="mode" value="adopt"><span>Existing login</span></label>
+    </fieldset>
+    <p class="hint" data-mode="login">A terminal opens with the official sign-in. Cofre never sees or copies your token.</p>
+    <p class="hint" data-mode="key" hidden>The key is stored in your system keychain and handed to the session only when it starts.</p>
+    <p class="hint" data-mode="adopt" hidden>Tracks a home that already exists, in place. Leave the folder empty to use the default one.</p>
+    <label class="field">Name<input name="label" required maxlength="80" autocomplete="off" placeholder="Work, Personal, Router…"></label>
+    <label class="field" data-mode="key" hidden>API key<input name="key" type="password" autocomplete="off" spellcheck="false"></label>
+    <label class="field" data-mode="key" hidden>Endpoint <small>optional, for routers and gateways</small><input name="base_url" type="url" autocomplete="off" spellcheck="false" placeholder="https://"></label>
+    <label class="check" data-mode="key" hidden><input name="bearer" type="checkbox">Send the key as a bearer token</label>
+    <label class="field" data-mode="login key">Model <small>optional</small><input name="model" autocomplete="off" spellcheck="false" placeholder="Starts every session with this model"></label>
+    <label class="field" data-mode="key" hidden>Fast model <small>optional, for background tasks</small><input name="fast_model" autocomplete="off" spellcheck="false"></label>
+    <label class="field" data-mode="adopt" hidden>Folder <small>optional</small><input name="dir" autocomplete="off" spellcheck="false" placeholder="~/.claude or ~/.codex by default"></label>
+    <p class="error" role="alert"></p>
+    <menu><button type="button" value="cancel" class="quiet" data-close>Cancel</button><button type="submit" class="primary">Add</button></menu>
+  </form>
+</dialog>
+
+<dialog id="edit" aria-labelledby="edit-title">
+  <form method="dialog" id="edit-form">
+    <h2 id="edit-title">Account</h2>
+    <label class="field">Name<input name="label" required maxlength="80" autocomplete="off"></label>
+    <label class="field">Model <small>optional</small><input name="model" autocomplete="off" spellcheck="false"></label>
+    <label class="field" data-only="key">Fast model <small>optional</small><input name="fast_model" autocomplete="off" spellcheck="false"></label>
+    <label class="field" data-only="key">Replace API key <small>leave empty to keep</small><input name="key" type="password" autocomplete="off" spellcheck="false"></label>
+    <label class="check" data-only="managed"><input name="kit" type="checkbox">Link the shared instructions folder</label>
+    <p class="error" role="alert"></p>
+    <menu class="spread">
+      <span>
+        <button type="button" class="quiet danger" id="remove">Remove</button>
+        <button type="button" class="quiet" id="relogin" data-only="login">Sign in again</button>
+      </span>
+      <span><button type="button" class="quiet" data-close>Cancel</button><button type="submit" class="primary">Save</button></span>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="settings" aria-labelledby="settings-title">
+  <form method="dialog" id="settings-form">
+    <h2 id="settings-title">Settings</h2>
+    <p class="hint">Shared instructions are linked into every managed account: CLAUDE.md or AGENTS.md, skills, commands, agents.</p>
+    <label class="field">Claude Code instructions folder<input name="claude_kit" autocomplete="off" spellcheck="false" placeholder="e.g. /home/you/.claude"></label>
+    <label class="field">Codex instructions folder<input name="codex_kit" autocomplete="off" spellcheck="false" placeholder="e.g. /home/you/.codex"></label>
+    <label class="field">Terminal command <small>optional, auto-detected when empty</small><input name="terminal" autocomplete="off" spellcheck="false" placeholder="kitty -e"></label>
+    <p class="error" role="alert"></p>
+    <menu><button type="button" class="quiet" data-close>Cancel</button><button type="submit" class="primary">Save</button></menu>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
