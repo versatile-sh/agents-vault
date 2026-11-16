@@ -8,15 +8,19 @@ const empty = byId("empty");
 const notice = byId("notice");
 const refreshButton = byId("refresh");
 const addButton = byId("add-button");
-const dialogs = { add: byId("add"), edit: byId("edit"), provider: byId("provider"), settings: byId("settings") };
+const dialogs = { add: byId("add"), edit: byId("edit"), provider: byId("provider"), settings: byId("settings"), login: byId("login") };
+const CUSTOM = "__custom";
 
 const TABS = {
   claude: { name: "Claude Code", unit: "account", add: "Add account", title: "No Claude Code accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
   codex: { name: "Codex", unit: "account", add: "Add account", title: "No Codex accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
+  grok: { name: "Grok", unit: "account", add: "Add account", title: "No Grok accounts yet", text: "Each account lives in its own isolated home, so one session never signs another out." },
   keys: { name: "API keys", unit: "key", add: "Add API key", title: "No API keys yet", text: "Keep one key per provider or router and open it in Claude Code, Codex or any other tool." },
 };
 const MORE_ICON = "M5 12h.01M12 12h.01M19 12h.01";
-const TOOL_NAMES = { claude: "Claude Code", codex: "Codex" };
+const TOOL_NAMES = { claude: "Claude Code", codex: "Codex", grok: "Grok" };
+const BADGES = { claude: "CC", codex: "CX", grok: "GK" };
+const MODEL_SOURCES = { claude: "Claude Code models", codex: "from your Codex account", grok: "from the Grok CLI" };
 
 let tab = "claude";
 let rows = [];
@@ -24,6 +28,7 @@ let providers = [];
 let presets = [];
 let editing = null;
 let editingProvider = null;
+let signingIn = null;
 
 function element(tag, properties = {}, children = []) {
   const node = document.createElement(tag);
@@ -83,6 +88,50 @@ function meter(name, title, window) {
   );
 }
 
+function money(balance) {
+  if (!balance) return "";
+  const symbol = balance.currency === "USD" ? "$" : `${balance.currency} `;
+  if (balance.remaining != null) return `${symbol}${balance.remaining.toFixed(2)} left`;
+  if (balance.used != null) return `${symbol}${balance.used.toFixed(2)} used`;
+  return "";
+}
+
+function setModels(form, options, current, note) {
+  const select = form.elements.model_choice;
+  const input = form.elements.model;
+  const known = options.some((option) => option.id === current);
+  const choices = [["", "Default"], ...options.map((option) => [option.id, option.label === option.id ? option.id : `${option.label}  ·  ${option.id}`]), [CUSTOM, "Other…"]];
+  select.replaceChildren(...choices.map(([value, text]) => element("option", { value, text })));
+  select.value = current ? (known ? current : CUSTOM) : "";
+  input.value = current && !known ? current : "";
+  input.hidden = select.value !== CUSTOM;
+  form.querySelector("[data-picker-note]").textContent = note;
+}
+
+function modelOf(form) {
+  const choice = form.elements.model_choice.value;
+  return (choice === CUSTOM ? form.elements.model.value.trim() : choice) || null;
+}
+
+async function loadModels(form, task, current, source) {
+  setModels(form, [], current, "loading…");
+  try {
+    const options = await task();
+    setModels(form, options, modelOf(form) ?? current, source);
+  } catch {
+    setModels(form, [], modelOf(form) ?? current, "type the model id");
+  }
+}
+
+function signIn(id, label) {
+  signingIn = id;
+  const form = byId("login-form");
+  form.reset();
+  byId("login-title").textContent = `Sign in to ${label}`;
+  form.querySelector(".error").textContent = "";
+  if (!dialogs.login.open) dialogs.login.showModal();
+}
+
 function host(url) {
   try {
     return new URL(url).host;
@@ -107,7 +156,7 @@ function meters(row) {
   if (limits.session) items.push(meter("5h", "5-hour limit used", limits.session));
   if (limits.weekly) items.push(meter("7d", "Weekly limit used", limits.weekly));
   if (items.length) return items;
-  const text = row.auth.kind === "api_key" ? "Pay as you go" : "Limits appear after the first session";
+  const text = row.auth.kind === "api_key" ? money(row.balance) || "Pay as you go" : "Limits appear after sign-in";
   return [element("span", { class: "plain", text })];
 }
 
@@ -115,7 +164,7 @@ function accountRow(row) {
   const info = subtitle(row);
   const launch = () => act(() => invoke("open_account", { id: row.id }), `Opened ${row.label}`);
   const open = element("button", { type: "button", class: "open", title: `Open ${row.label} in a terminal` }, [
-    element("span", { class: "badge", text: row.harness === "claude" ? "CC" : "CX" }),
+    element("span", { class: "badge", text: BADGES[row.harness] }),
     element("span", { class: "who" }, [
       element("strong", { text: row.label }),
       element("span", { text: info.text, class: info.alert ? "alert" : "" }),
@@ -144,6 +193,7 @@ function providerRow(provider) {
       element("strong", { text: provider.label }),
       element("span", { text: [...hosts, provider.key_env].join(" · ") }),
     ]),
+    element("span", { class: "money", text: money(provider.balance) }),
   ]);
   const launch = element("div", { class: "launch" });
   let select = null;
@@ -165,7 +215,7 @@ function providerRow(provider) {
 
 function render() {
   const visible = rows.filter((row) => row.harness === tab);
-  const counts = { claude: 0, codex: 0, keys: providers.length };
+  const counts = { claude: 0, codex: 0, grok: 0, keys: providers.length };
   for (const row of rows) counts[row.harness] += 1;
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.setAttribute("aria-selected", String(button.dataset.tab === tab));
@@ -191,7 +241,7 @@ function render() {
 async function load(refresh = false) {
   refreshButton.classList.toggle("spinning", refresh);
   try {
-    [rows, providers] = await Promise.all([invoke("accounts", { refresh }), invoke("providers")]);
+    [rows, providers] = await Promise.all([invoke("accounts", { refresh }), invoke("providers", { refresh })]);
     render();
   } catch (error) {
     say(String(error), true);
@@ -230,9 +280,19 @@ function showMode() {
   const form = byId("add-form");
   const mode = form.elements.mode.value;
   for (const node of form.querySelectorAll("[data-mode]")) {
-    node.hidden = !node.dataset.mode.split(" ").includes(mode);
+    node.hidden = !node.dataset.mode.split(" ").includes(mode) || (node.dataset.skip ?? "").split(" ").includes(tab);
   }
   form.elements.key.required = mode === "key";
+  if (mode === "login") loadModels(form, () => invoke("harness_models", { harness: tab }), null, MODEL_SOURCES[tab]);
+  if (mode === "key" && tab === "grok") loadModels(form, () => invoke("harness_models", { harness: tab }), null, MODEL_SOURCES[tab]);
+  if (mode === "key" && tab !== "grok") setModels(form, [], modelOf(form), "type the key to list them");
+}
+
+function loadKeyModels() {
+  const form = byId("add-form");
+  if (form.elements.mode.value !== "key" || !form.elements.key.value || tab === "grok") return;
+  const request = { harness: tab, baseUrl: form.elements.base_url.value.trim() || null, bearer: form.elements.bearer.checked, key: form.elements.key.value };
+  loadModels(form, () => invoke("key_models", request), modelOf(form), "from the endpoint");
 }
 
 function openAdd() {
@@ -252,8 +312,8 @@ function edit(row) {
   const kinds = { key: row.auth.kind === "api_key", login: row.auth.kind === "login", managed: !row.native_home };
   for (const node of form.querySelectorAll("[data-only]")) node.hidden = !kinds[node.dataset.only];
   form.elements.label.value = row.label;
-  form.elements.model.value = row.model ?? "";
   form.elements.fast_model.value = row.fast_model ?? "";
+  loadModels(form, () => invoke("account_models", { id: row.id }), row.model, "available to this account");
   form.elements.key.value = "";
   form.elements.kit.checked = row.kit;
   form.querySelector(".error").textContent = "";
@@ -275,6 +335,7 @@ function editProvider(provider) {
   byId("provider-title").textContent = provider ? provider.label : "Add API key";
   byId("presets").hidden = Boolean(provider);
   byId("advanced").open = Boolean(provider);
+  byId("model-catalog").hidden = true;
   for (const node of form.querySelectorAll("[data-only=edit]")) node.hidden = !provider;
   form.elements.key.required = !provider;
   if (provider) {
@@ -302,31 +363,44 @@ function confirmed(button) {
   return false;
 }
 
-byId("add-form").addEventListener("change", showMode);
+byId("add-form").addEventListener("change", (event) => {
+  if (event.target.name === "mode") showMode();
+  if (["key", "base_url", "bearer"].includes(event.target.name)) loadKeyModels();
+});
 
-byId("add-form").addEventListener("submit", (event) => {
+for (const form of [byId("add-form"), byId("edit-form")]) {
+  form.elements.model_choice.addEventListener("change", () => {
+    form.elements.model.hidden = form.elements.model_choice.value !== CUSTOM;
+    if (!form.elements.model.hidden) form.elements.model.focus();
+  });
+}
+
+byId("add-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const value = (name) => form.elements[name].value.trim();
   const mode = form.elements.mode.value;
+  const label = value("label");
+  let created = null;
   const task =
     mode === "adopt"
-      ? () => invoke("adopt_account", { label: value("label"), harness: tab, dir: value("dir") || null })
-      : () =>
-          invoke("add_account", {
+      ? () => invoke("adopt_account", { label, harness: tab, dir: value("dir") || null })
+      : async () => {
+          created = await invoke("add_account", {
             form: {
-              label: value("label"),
+              label,
               harness: tab,
               api_key: mode === "key",
               base_url: value("base_url") || null,
               bearer: form.elements.bearer.checked,
-              model: value("model") || null,
+              model: modelOf(form),
               fast_model: value("fast_model") || null,
               key: mode === "key" ? form.elements.key.value : null,
             },
           });
-  const done = mode === "login" ? "Finish signing in on the terminal that opened" : `Added ${value("label")}`;
-  submit(dialogs.add, task, done);
+        };
+  await submit(dialogs.add, task, mode === "login" ? "" : `Added ${label}`);
+  if (mode === "login" && created) signIn(created, label);
 });
 
 byId("edit-form").addEventListener("submit", (event) => {
@@ -338,7 +412,7 @@ byId("edit-form").addEventListener("submit", (event) => {
     async () => {
       const patch = {
         label: form.elements.label.value.trim(),
-        model: form.elements.model.value.trim() || null,
+        model: modelOf(form),
         fast_model: form.elements.fast_model.value.trim() || null,
         kit: form.elements.kit.checked,
       };
@@ -355,9 +429,85 @@ byId("remove").addEventListener("click", (event) => {
   submit(dialogs.edit, () => invoke("remove_account", { id: editing.id, purge: false }), `Removed ${editing.label}; its folder was kept`);
 });
 
-byId("relogin").addEventListener("click", () => {
+byId("relogin").addEventListener("click", async () => {
+  const row = editing;
   dialogs.edit.close();
-  act(() => invoke("login_account", { id: editing.id }), "Finish signing in on the terminal that opened");
+  try {
+    await invoke("login_account", { id: row.id });
+    signIn(row.id, row.label);
+  } catch (error) {
+    say(String(error), true);
+  }
+});
+
+byId("login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = form.querySelector(".error");
+  error.textContent = "";
+  try {
+    await invoke("login_code", { id: signingIn, code: form.elements.code.value });
+    form.elements.code.value = "";
+  } catch (failure) {
+    error.textContent = String(failure);
+  }
+});
+
+byId("login-reopen").addEventListener("click", async () => {
+  try {
+    await invoke("login_reopen", { id: signingIn });
+  } catch (failure) {
+    byId("login-form").querySelector(".error").textContent = String(failure);
+  }
+});
+
+for (const button of document.querySelectorAll("[data-cancel-login]")) {
+  button.addEventListener("click", () => dialogs.login.close());
+}
+
+dialogs.login.addEventListener("close", () => {
+  if (signingIn) invoke("login_cancel", { id: signingIn });
+  signingIn = null;
+  load();
+});
+
+function providerPayload(form) {
+  const value = (name) => form.elements[name].value.trim();
+  const words = (name) => value(name).split(/[\s,]+/).filter(Boolean);
+  return {
+    label: value("label"),
+    key_env: value("key_env"),
+    anthropic_url: value("anthropic_url") || null,
+    openai_url: value("openai_url") || null,
+    models: words("models"),
+    command: words("command"),
+    key: form.elements.key.value || null,
+  };
+}
+
+byId("fetch-models").addEventListener("click", async () => {
+  const form = byId("provider-form");
+  const catalog = byId("model-catalog");
+  const error = form.querySelector(".error");
+  error.textContent = "";
+  try {
+    const options = await invoke("provider_models", { id: editingProvider?.id ?? null, form: providerPayload(form) });
+    catalog.replaceChildren(
+      element("option", { value: "", text: `Add one of ${options.length} models…` }),
+      ...options.map((option) => element("option", { value: option.id, text: option.label === option.id ? option.id : `${option.label}  ·  ${option.id}` })),
+    );
+    catalog.hidden = false;
+  } catch (failure) {
+    error.textContent = String(failure);
+  }
+});
+
+byId("model-catalog").addEventListener("change", (event) => {
+  const input = byId("provider-form").elements.models;
+  const picked = event.target.value;
+  const current = input.value.trim().split(/[\s,]+/).filter(Boolean);
+  if (picked && !current.includes(picked)) input.value = [...current, picked].join(" ");
+  event.target.value = "";
 });
 
 byId("provider-form").addEventListener("change", (event) => {
@@ -370,17 +520,7 @@ byId("provider-form").addEventListener("change", (event) => {
 byId("provider-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  const value = (name) => form.elements[name].value.trim();
-  const words = (name) => value(name).split(/[\s,]+/).filter(Boolean);
-  const payload = {
-    label: value("label"),
-    key_env: value("key_env"),
-    anthropic_url: value("anthropic_url") || null,
-    openai_url: value("openai_url") || null,
-    models: words("models"),
-    command: words("command"),
-    key: form.elements.key.value || null,
-  };
+  const payload = providerPayload(form);
   const current = editingProvider;
   const task = current ? () => invoke("update_provider", { id: current.id, form: payload }) : () => invoke("add_provider", { form: payload });
   submit(dialogs.provider, task, current ? "Saved" : `Added ${payload.label}`).then(() => {
@@ -402,6 +542,7 @@ byId("open-settings").addEventListener("click", async () => {
     const current = await invoke("settings");
     form.elements.claude_kit.value = current.claude_kit ?? "";
     form.elements.codex_kit.value = current.codex_kit ?? "";
+    form.elements.grok_kit.value = current.grok_kit ?? "";
     form.elements.terminal.value = current.terminal.join(" ");
     form.querySelector(".error").textContent = "";
     dialogs.settings.showModal();
@@ -417,6 +558,7 @@ byId("settings-form").addEventListener("submit", (event) => {
   const settings = {
     claude_kit: form.elements.claude_kit.value.trim() || null,
     codex_kit: form.elements.codex_kit.value.trim() || null,
+    grok_kit: form.elements.grok_kit.value.trim() || null,
     terminal: form.elements.terminal.value.trim().split(/\s+/).filter(Boolean),
   };
   submit(dialogs.settings, () => invoke("save_settings", { settings }), "Settings saved");
@@ -454,5 +596,20 @@ addButton.addEventListener("click", openAdd);
 byId("empty-add").addEventListener("click", openAdd);
 refreshButton.addEventListener("click", () => load(true));
 document.addEventListener("contextmenu", (event) => event.preventDefault());
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Tab" || event.key.startsWith("Arrow")) document.documentElement.dataset.input = "keyboard";
+});
+document.addEventListener("pointerdown", () => {
+  document.documentElement.dataset.input = "pointer";
+});
 listen("ledger-changed", () => load());
+listen("login-finished", (event) => {
+  const { id, label, ok } = event.payload;
+  if (signingIn === id) {
+    signingIn = null;
+    dialogs.login.close();
+  }
+  say(ok ? `${label} is signed in` : `Sign-in for ${label} was not completed`, !ok);
+  load();
+});
 start();

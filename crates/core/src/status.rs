@@ -3,8 +3,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
+use crate::claude;
+use crate::codex;
 use crate::launch::harness_command;
 use crate::limits;
 use crate::model::{Account, Config, Harness};
@@ -36,9 +38,27 @@ fn parse_claude(stdout: &str) -> Status {
     Status {
         logged_in: json.get("loggedIn").and_then(Value::as_bool) == Some(true),
         email: text("email"),
-        plan: text("subscriptionType"),
+        plan: text("planTier")
+            .map(|tier| claude::tier_label(&tier))
+            .or_else(|| text("subscriptionType")),
         checked_at: now(),
     }
+}
+
+fn parse_codex(reply: &Value) -> Status {
+    let account = reply.get("account").filter(|account| account.is_object());
+    let text = |key: &str| account?.get(key)?.as_str().map(str::to_string);
+    Status {
+        logged_in: account.is_some(),
+        email: text("email"),
+        plan: text("planType").map(|plan| claude::tier_label(&plan)),
+        checked_at: now(),
+    }
+}
+
+fn claude_plan(store: &Store, account: &Account) -> Option<String> {
+    let token = claude::token(&store.home(account))?;
+    claude::plan(&token.access).ok().flatten()
 }
 
 /// Asks the harness CLI for the session state; the CLI renews its own token.
@@ -47,18 +67,29 @@ pub fn check(store: &Store, account: &Account) -> Result<Status> {
     let status = match account.harness {
         Harness::Claude => {
             command.args(["auth", "status"]);
-            parse_claude(&proc::run(command, Duration::from_secs(120))?.stdout)
+            let mut status = parse_claude(&proc::run(command, Duration::from_secs(120))?.stdout);
+            if status.logged_in {
+                status.plan = claude_plan(store, account).or(status.plan);
+            }
+            status
         }
         Harness::Codex => {
-            command.args(["login", "status"]);
+            let reply = codex::request(
+                store,
+                account,
+                "account/read",
+                json!({ "refreshToken": false }),
+            )?;
+            let _ = limits::probe_codex(store, account);
+            parse_codex(&reply)
+        }
+        Harness::Grok => {
+            command.arg("models");
             let output = proc::run(command, Duration::from_secs(60))?;
-            let renewed = output.success && limits::probe_codex(store, account).is_ok();
-            let previous = read(store, &account.id).unwrap_or_default();
             Status {
-                logged_in: output.success
-                    && (renewed || previous.logged_in || previous.checked_at == 0),
+                logged_in: output.success && !output.stdout.contains("not authenticated"),
                 checked_at: now(),
-                ..previous
+                ..Status::default()
             }
         }
     };
@@ -132,11 +163,28 @@ mod tests {
         assert!(status.logged_in);
         assert_eq!(status.email.as_deref(), Some("a@b.c"));
         assert_eq!(status.plan.as_deref(), Some("max"));
+        let tiered = parse_claude(
+            "{\"loggedIn\":true,\"subscriptionType\":\"max\",\"planTier\":\"max_20x\"}",
+        );
+        assert_eq!(tiered.plan.as_deref(), Some("Max 20x"));
     }
 
     #[test]
     fn treats_unreadable_output_as_logged_out() {
         assert!(!parse_claude("boom").logged_in);
         assert!(!parse_claude("{\"loggedIn\":false}").logged_in);
+    }
+
+    #[test]
+    fn reads_codex_account_and_treats_no_account_as_signed_out() {
+        let status = parse_codex(
+            &json!({ "account": { "type": "chatgpt", "email": "a@b.c", "planType": "plus" } }),
+        );
+        assert!(status.logged_in);
+        assert_eq!(
+            (status.email.as_deref(), status.plan.as_deref()),
+            (Some("a@b.c"), Some("Plus"))
+        );
+        assert!(!parse_codex(&json!({ "account": null })).logged_in);
     }
 }

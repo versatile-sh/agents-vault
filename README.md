@@ -1,15 +1,16 @@
 # Versatile Vault
 
-One ledger for every Claude Code and Codex account, API key and router. Click an account and a terminal opens already signed in, on the right model, with your shared instructions in place. A tray icon shows each account's 5-hour and weekly limits.
+One ledger for every Claude Code, Codex and Grok account, API key and router. Click an account and a terminal opens already signed in, on the right model, with your shared instructions in place. A tray icon shows each account's 5-hour and weekly limits.
 
-Works on Linux, macOS and Windows. Not affiliated with Anthropic or OpenAI.
+Works on Linux, macOS and Windows. Not affiliated with Anthropic, OpenAI or xAI.
 
 ## How it stays safe
 
 | Rule | What it means |
 | --- | --- |
-| One home per account | Every account runs with its own `CLAUDE_CONFIG_DIR` or `CODEX_HOME`. Credentials are never copied between folders, so a rotating refresh token only ever exists in one place. |
-| The harness owns its tokens | Versatile Vault never reads, stores or refreshes an OAuth token. Sign-in, refresh and sign-out are done by `claude` and `codex` themselves, inside the account's home. |
+| One home per account | Every account runs with its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME`. Credentials are never copied between folders, so a rotating refresh token only ever exists in one place. |
+| The harness owns its tokens | Sign-in, refresh and sign-out are done by `claude`, `codex` and `grok` themselves, inside the account's home. Versatile Vault never stores, copies or refreshes an OAuth token. |
+| One read-only exception | To show Claude limits and the plan name, the access token Claude Code saved is read in memory and sent only to Anthropic's own account endpoints (`api.anthropic.com/api/oauth/usage` and `/profile`). These endpoints are not documented; if they change, limits fall back to what Claude Code reports to its status line. |
 | Keys live in the OS keychain | API keys go to macOS Keychain, Windows Credential Manager or the Secret Service. They are not written to the ledger, to a config file or to a command line. |
 | Keys are resolved late | The terminal runs `vvault run <id>`; the key is read from the keychain there and passed to the harness through its environment only. |
 | Clean environment | Variables that would override an identity (`ANTHROPIC_*`, `CODEX_HOME`, `OPENAI_API_KEY`, …) are removed before the harness starts. |
@@ -30,9 +31,12 @@ Put `vvault-app` next to `vvault` (or keep `vvault` on `PATH`). For installers (
 
 ## Use
 
+In the app, signing in opens the official page in your browser and finishes by itself; no terminal is involved. From the command line:
+
 ```sh
-vvault add work                       # opens the official Claude Code sign-in
-vvault add team --harness codex       # opens the official Codex sign-in
+vvault add work                       # runs the official Claude Code sign-in
+vvault add team --harness codex       # runs the official Codex sign-in
+vvault add x --harness grok           # runs the official Grok sign-in
 vvault add router --base-url https://openrouter.ai/api --bearer --model vendor/model
 vvault add api --api-key --model claude-sonnet-5-5
 vvault adopt personal                 # track your existing ~/.claude in place
@@ -80,15 +84,35 @@ vvault kit codex --dir ~/.codex
 
 Files you already have inside a profile are never replaced.
 
-### Limits
+### Limits, plan and balance
 
 | Account | Source | Freshness |
 | --- | --- | --- |
-| Claude Code sign-in | The `rate_limits` field Claude Code sends to its status line | Updated on every reply of a running session; windows reset on their own when their time passes |
-| Codex sign-in | The Codex CLI's own `account/rateLimits/read` request | On demand, cached for 60 seconds |
-| API key / router | None; these are pay as you go | — |
+| Claude Code sign-in | Anthropic's account endpoints, plus the `rate_limits` field Claude Code sends to its status line during a session | Right after sign-in, then at most once a minute |
+| Codex sign-in | The Codex CLI's own `account/read` and `account/rateLimits/read` requests | Right after sign-in, then at most once a minute |
+| Grok sign-in | Session state only; the Grok CLI does not report limits | — |
+| OpenRouter and DeepSeek keys | The provider's key or balance request | At most every two minutes |
+| Other API keys | None | — |
+
+On macOS Claude Code keeps its sign-in in the Keychain rather than on disk, so Claude limits there come only from the status line.
 
 Versatile Vault adds its status line through `--settings` at launch, so your `settings.json` is not modified. If you already have a status line, it keeps running and its output is what you see.
+
+### Models
+
+The model field is a list taken from the account itself, with "Other…" for anything not listed.
+
+| Account | Where the list comes from |
+| --- | --- |
+| Claude Code sign-in | The aliases Claude Code documents (`fable`, `opus`, `sonnet`, `haiku`, …) plus the options Claude Code cached for that account |
+| Codex sign-in | The Codex CLI's `model/list` request |
+| Grok | `grok models` |
+| API key or provider | The endpoint's models listing |
+
+```sh
+vvault models work
+vvault models --harness codex
+```
 
 ### Keeping sessions alive
 

@@ -5,9 +5,11 @@ use std::process::{Command, ExitCode, Stdio};
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Value};
+use vvault_core::balance::Balance;
 use vvault_core::ledger::{self, clearable, NewAccount, Row};
 use vvault_core::limits::{self, Window};
 use vvault_core::model::presets;
+use vvault_core::models;
 use vvault_core::status::{self, Pass};
 use vvault_core::store::now;
 use vvault_core::{
@@ -140,6 +142,15 @@ enum Action {
     },
     /// Choose the terminal command used by `open` (empty restores auto-detection)
     Terminal { command: Vec<String> },
+    /// List the models an account, a harness or a provider key can use
+    Models {
+        #[arg(
+            help = "Account or provider; omit with --harness to see what a new account would offer"
+        )]
+        name: Option<String>,
+        #[arg(long)]
+        harness: Option<Harness>,
+    },
     /// Renew every signed-in account that is due
     Keepalive {
         #[arg(long)]
@@ -234,6 +245,15 @@ fn reset(window: &Option<Window>) -> String {
     }
 }
 
+fn money(balance: &Option<Balance>) -> Option<String> {
+    let balance = balance.as_ref()?;
+    match (balance.remaining, balance.used) {
+        (Some(left), _) => Some(format!("{left:.2} {} left", balance.currency)),
+        (None, Some(used)) => Some(format!("{used:.2} {} used", balance.currency)),
+        _ => None,
+    }
+}
+
 fn describe(account: &Account) -> &'static str {
     match (&account.auth, account.harness) {
         (Auth::Login, _) => "login",
@@ -258,11 +278,12 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
                      account,
                      limits,
                      status,
+                     balance,
                  }| {
                     json!({
                         "id": account.id, "label": account.label, "harness": account.harness,
                         "auth": describe(account), "model": account.model,
-                        "limits": limits, "status": status,
+                        "limits": limits, "status": status, "balance": balance,
                     })
                 },
             )
@@ -285,6 +306,7 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
         account,
         limits,
         status,
+        balance,
     } in rows
     {
         let limits = limits.unwrap_or_default();
@@ -292,7 +314,11 @@ fn list(store: &Store, as_json: bool, refresh: bool) -> Result<()> {
             (Auth::Login, Some(s)) if !s.logged_in => "needs login".to_string(),
             (Auth::Login, Some(s)) => s.email.clone().unwrap_or_else(|| "signed in".into()),
             (Auth::Login, None) => "not checked".into(),
-            _ => account.model.clone().unwrap_or_default(),
+            _ => [money(&balance), account.model.clone()]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join("  "),
         };
         println!(
             "{:<20} {:<7} {:<8} {:>5} {:>6}  {:>5} {:>6}  {}",
@@ -329,7 +355,7 @@ fn login(store: &Store, key: &str) -> Result<()> {
     let mut command = launch::harness_command(store, account)?;
     match account.harness {
         Harness::Claude => command.args(["auth", "login"]),
-        Harness::Codex => command.arg("login"),
+        Harness::Codex | Harness::Grok => command.arg("login"),
     };
     let finished = command
         .status()
@@ -793,6 +819,25 @@ fn dispatch(store: &Store, action: Action) -> Result<i32> {
                 println!("{}: {line}", account.label);
             }
             return Ok(i32::from(failed));
+        }
+        Action::Models { name, harness } => {
+            let config = store.load()?;
+            let models = match (name, harness) {
+                (Some(name), _) => match config.find(&name) {
+                    Ok(account) => models::for_account(store, account)?,
+                    Err(_) => {
+                        let provider = config.provider(&name)?;
+                        let key = secrets::get(&provider.id)?
+                            .context("no API key saved for this provider")?;
+                        models::for_provider(provider, &key)?
+                    }
+                },
+                (None, Some(harness)) => models::for_harness(store, harness)?,
+                (None, None) => bail!("name an account or provider, or pass --harness"),
+            };
+            for model in models {
+                println!("{:<34} {}", model.id, model.label);
+            }
         }
         Action::Waybar => waybar(store)?,
         Action::Statusline { account } => statusline(store, &account)?,

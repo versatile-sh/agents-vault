@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub enum Harness {
     Claude,
     Codex,
+    Grok,
 }
 
 impl Harness {
@@ -18,6 +19,7 @@ impl Harness {
         match self {
             Harness::Claude => "claude",
             Harness::Codex => "codex",
+            Harness::Grok => "grok",
         }
     }
 
@@ -26,6 +28,7 @@ impl Harness {
         match self {
             Harness::Claude => "CLAUDE_CONFIG_DIR",
             Harness::Codex => "CODEX_HOME",
+            Harness::Grok => "GROK_HOME",
         }
     }
 
@@ -35,6 +38,7 @@ impl Harness {
         Some(home.join(match self {
             Harness::Claude => ".claude",
             Harness::Codex => ".codex",
+            Harness::Grok => ".grok",
         }))
     }
 
@@ -51,6 +55,7 @@ impl Harness {
                 "keybindings.json",
             ],
             Harness::Codex => &["AGENTS.md", "skills", "prompts"],
+            Harness::Grok => &["AGENTS.md", "skills"],
         }
     }
 
@@ -58,7 +63,7 @@ impl Harness {
     pub fn seed_file(self) -> &'static str {
         match self {
             Harness::Claude => "settings.json",
-            Harness::Codex => "config.toml",
+            Harness::Codex | Harness::Grok => "config.toml",
         }
     }
 }
@@ -70,7 +75,8 @@ impl std::str::FromStr for Harness {
         match value.to_ascii_lowercase().as_str() {
             "claude" => Ok(Harness::Claude),
             "codex" => Ok(Harness::Codex),
-            other => bail!("unknown harness `{other}` (expected claude or codex)"),
+            "grok" => Ok(Harness::Grok),
+            other => bail!("unknown harness `{other}` (expected claude, codex or grok)"),
         }
     }
 }
@@ -156,6 +162,9 @@ impl Account {
         } = &self.auth
         {
             endpoint(url)?;
+            if self.harness == Harness::Grok {
+                bail!("Grok accounts use the xAI endpoint; a custom endpoint is not supported");
+            }
         }
         for key in self.env.keys() {
             let valid = !key.is_empty()
@@ -349,6 +358,8 @@ pub struct Config {
     #[serde(default)]
     pub codex_kit: Kit,
     #[serde(default)]
+    pub grok_kit: Kit,
+    #[serde(default)]
     pub terminal: Vec<String>,
 }
 
@@ -360,6 +371,7 @@ impl Default for Config {
             providers: Vec::new(),
             claude_kit: Kit::default(),
             codex_kit: Kit::default(),
+            grok_kit: Kit::default(),
             terminal: Vec::new(),
         }
     }
@@ -402,6 +414,7 @@ impl Config {
         match harness {
             Harness::Claude => &self.claude_kit,
             Harness::Codex => &self.codex_kit,
+            Harness::Grok => &self.grok_kit,
         }
     }
 
@@ -410,6 +423,7 @@ impl Config {
         match harness {
             Harness::Claude => &mut self.claude_kit,
             Harness::Codex => &mut self.codex_kit,
+            Harness::Grok => &mut self.grok_kit,
         }
     }
 }

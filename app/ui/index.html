@@ -17,6 +17,7 @@
     <nav class="nav" role="tablist" aria-label="Sections">
       <button type="button" role="tab" data-tab="claude" aria-selected="true"><span>Claude Code</span><span class="count"></span></button>
       <button type="button" role="tab" data-tab="codex" aria-selected="false"><span>Codex</span><span class="count"></span></button>
+      <button type="button" role="tab" data-tab="grok" aria-selected="false"><span>Grok</span><span class="count"></span></button>
       <button type="button" role="tab" data-tab="keys" aria-selected="false"><span>API keys</span><span class="count"></span></button>
     </nav>
     <button type="button" id="open-settings" class="side-link" aria-label="Settings">
@@ -58,16 +59,16 @@
     </header>
     <div class="body">
       <fieldset class="options" aria-label="How it signs in">
-        <label><input type="radio" name="mode" value="login" checked><span><strong>Sign in</strong><small>Opens the official sign-in in a terminal. Your token is never read or copied.</small></span></label>
+        <label><input type="radio" name="mode" value="login" checked><span><strong>Sign in</strong><small>Opens the official sign-in in your browser. Your session is never copied between accounts.</small></span></label>
         <label><input type="radio" name="mode" value="key"><span><strong>API key</strong><small>Stored in your system keychain and handed to the session when it starts.</small></span></label>
         <label><input type="radio" name="mode" value="adopt"><span><strong>Existing login</strong><small>Tracks a folder you already use, in place. Nothing is moved.</small></span></label>
       </fieldset>
       <label class="field"><span class="label">Name</span><input name="label" required maxlength="80" autocomplete="off" placeholder="Work, Personal…"></label>
       <label class="field" data-mode="key" hidden><span class="label">API key</span><input name="key" type="password" autocomplete="off" spellcheck="false"></label>
-      <label class="field" data-mode="key" hidden><span class="label">Endpoint <small>optional</small></span><input name="base_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
-      <label class="check" data-mode="key" hidden><input name="bearer" type="checkbox">Send the key as a bearer token</label>
-      <label class="field" data-mode="login key"><span class="label">Model <small>optional</small></span><input name="model" class="mono" autocomplete="off" spellcheck="false" placeholder="every session starts on it"></label>
-      <label class="field" data-mode="key" hidden><span class="label">Fast model <small>optional</small></span><input name="fast_model" class="mono" autocomplete="off" spellcheck="false" placeholder="for background tasks"></label>
+      <label class="field" data-mode="key" data-skip="grok" hidden><span class="label">Endpoint <small>optional</small></span><input name="base_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
+      <label class="check" data-mode="key" data-skip="grok" hidden><input name="bearer" type="checkbox">Send the key as a bearer token</label>
+      <div class="field" data-picker data-mode="login key"><span class="label">Model <small data-picker-note></small></span><select name="model_choice" aria-label="Model"></select><input name="model" class="mono" autocomplete="off" spellcheck="false" placeholder="model id" aria-label="Model id" hidden></div>
+      <label class="field" data-mode="key" data-skip="grok codex" hidden><span class="label">Fast model <small>optional</small></span><input name="fast_model" class="mono" autocomplete="off" spellcheck="false" placeholder="for background tasks"></label>
       <label class="field" data-mode="adopt" hidden><span class="label">Folder <small>optional</small></span><input name="dir" class="mono" autocomplete="off" spellcheck="false" placeholder="the default home when empty"></label>
       <p class="error" role="alert"></p>
     </div>
@@ -83,7 +84,7 @@
     </header>
     <div class="body">
       <label class="field"><span class="label">Name</span><input name="label" required maxlength="80" autocomplete="off"></label>
-      <label class="field"><span class="label">Model <small>optional</small></span><input name="model" class="mono" autocomplete="off" spellcheck="false"></label>
+      <div class="field" data-picker><span class="label">Model <small data-picker-note></small></span><select name="model_choice" aria-label="Model"></select><input name="model" class="mono" autocomplete="off" spellcheck="false" placeholder="model id" aria-label="Model id" hidden></div>
       <label class="field" data-only="key"><span class="label">Fast model <small>optional</small></span><input name="fast_model" class="mono" autocomplete="off" spellcheck="false"></label>
       <label class="field" data-only="key"><span class="label">Replace API key <small>empty keeps the current one</small></span><input name="key" type="password" autocomplete="off" spellcheck="false"></label>
       <label class="check" data-only="managed"><input name="kit" type="checkbox">Link the shared instructions folder</label>
@@ -109,7 +110,7 @@
       <fieldset class="options compact" aria-label="Provider" id="presets"></fieldset>
       <label class="field"><span class="label">Name</span><input name="label" required maxlength="80" autocomplete="off" placeholder="My gateway"></label>
       <label class="field"><span class="label">API key <small data-only="edit">empty keeps the current one</small></span><input name="key" type="password" autocomplete="off" spellcheck="false"></label>
-      <label class="field"><span class="label">Models <small>first is the default</small></span><input name="models" class="mono" autocomplete="off" spellcheck="false" placeholder="vendor/model another-model"></label>
+      <div class="field"><span class="label">Models <button type="button" class="link" id="fetch-models">Load from provider</button></span><input name="models" class="mono" autocomplete="off" spellcheck="false" placeholder="vendor/model another-model" aria-label="Models"><select id="model-catalog" aria-label="Add a model" hidden></select></div>
       <details id="advanced">
         <summary>Endpoints and tool</summary>
         <label class="field"><span class="label">Anthropic-compatible endpoint <small>Claude Code</small></span><input name="anthropic_url" class="mono" autocomplete="off" spellcheck="false" placeholder="https://"></label>
@@ -126,6 +127,22 @@
   </form>
 </dialog>
 
+<dialog id="login" aria-labelledby="login-title">
+  <form method="dialog" id="login-form">
+    <header>
+      <h2 id="login-title">Sign in</h2>
+      <button type="button" class="close" data-cancel-login aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    </header>
+    <div class="body">
+      <p class="waiting"><span class="pulse" aria-hidden="true"></span>Waiting for you to finish in the browser</p>
+      <p class="lede">The official sign-in page opened in your browser. This closes by itself as soon as you are done. <button type="button" class="link" id="login-reopen">Open the page again</button></p>
+      <label class="field"><span class="label">Code <small>only if the page shows one</small></span><input name="code" class="mono" autocomplete="off" spellcheck="false"></label>
+      <p class="error" role="alert"></p>
+    </div>
+    <footer><button type="button" class="quiet" data-cancel-login>Cancel</button><button type="submit" class="primary">Send code</button></footer>
+  </form>
+</dialog>
+
 <dialog id="settings" aria-labelledby="settings-title">
   <form method="dialog" id="settings-form">
     <header>
@@ -136,6 +153,7 @@
       <p class="lede">Shared instructions are linked into every managed account: CLAUDE.md or AGENTS.md, skills, commands and agents.</p>
       <label class="field"><span class="label">Claude Code instructions folder</span><input name="claude_kit" class="mono" autocomplete="off" spellcheck="false" placeholder="/home/you/.claude"></label>
       <label class="field"><span class="label">Codex instructions folder</span><input name="codex_kit" class="mono" autocomplete="off" spellcheck="false" placeholder="/home/you/.codex"></label>
+      <label class="field"><span class="label">Grok instructions folder</span><input name="grok_kit" class="mono" autocomplete="off" spellcheck="false" placeholder="/home/you/.grok"></label>
       <label class="field"><span class="label">Terminal command <small>detected when empty</small></span><input name="terminal" class="mono" autocomplete="off" spellcheck="false" placeholder="kitty -e"></label>
       <p class="error" role="alert"></p>
     </div>

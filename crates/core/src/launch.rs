@@ -33,6 +33,9 @@ pub fn scrubbed(key: &str) -> bool {
                 | "CODEX_HOME"
                 | "CODEX_API_KEY"
                 | "CODEX_ACCESS_TOKEN"
+                | "GROK_HOME"
+                | "XAI_API_KEY"
+                | "GROK_CODE_XAI_API_KEY"
                 | "OPENAI_API_KEY"
                 | "OPENAI_BASE_URL"
                 | KEY_ENV
@@ -161,6 +164,15 @@ pub fn plan(
                 args.extend(["-m".to_string(), model.clone()]);
             }
         }
+        (Harness::Grok, _) => {}
+    }
+    if account.harness == Harness::Grok {
+        if let Auth::ApiKey { .. } = &account.auth {
+            env.insert("XAI_API_KEY".into(), key()?.to_string());
+        }
+        if let Some(model) = &account.model {
+            args.extend(["-m".to_string(), model.clone()]);
+        }
     }
     for (name, value) in &account.env {
         if secret.is_some_and(|secret| value.contains(secret)) {
@@ -187,6 +199,7 @@ pub fn provider_account(
     let url = match harness {
         Harness::Claude => provider.anthropic_url.clone(),
         Harness::Codex => provider.openai_url.clone(),
+        Harness::Grok => None,
     };
     let Some(url) = url else {
         bail!(
@@ -511,5 +524,31 @@ mod tests {
         );
         assert!(!launch.env.contains_key("OPENAI_API_KEY"));
         assert!(launch.args.is_empty());
+    }
+
+    #[test]
+    fn grok_accounts_get_their_own_home_and_the_xai_key() {
+        if !harness_available(Harness::Grok) {
+            return;
+        }
+        let mut account = Account::new(
+            "x",
+            Harness::Grok,
+            Auth::ApiKey {
+                base_url: None,
+                bearer: false,
+            },
+        )
+        .unwrap();
+        account.model = Some("grok-4.6".into());
+        let launch = planned(&account, Some("xai-secret")).unwrap();
+        assert!(launch.env["GROK_HOME"].ends_with(&account.id));
+        assert_eq!(launch.env["XAI_API_KEY"], "xai-secret");
+        assert_eq!(&launch.args[..2], ["-m", "grok-4.6"]);
+        let custom = Auth::ApiKey {
+            base_url: Some("https://gateway.example".into()),
+            bearer: false,
+        };
+        assert!(Account::new("y", Harness::Grok, custom).is_err());
     }
 }
