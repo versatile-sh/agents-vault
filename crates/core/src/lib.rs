@@ -6,6 +6,7 @@ pub mod codex;
 pub mod kit;
 pub mod launch;
 pub mod ledger;
+pub mod login;
 pub mod limits;
 pub mod model;
 pub mod proc;
