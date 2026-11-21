@@ -1,166 +1,106 @@
-# Versatile Vault
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-hero-dark.svg">
+    <img src="docs/assets/banner-hero-light.svg" alt="agents-vault: one ledger for every AI account. Claude Code, Codex and Grok accounts, keys and routers, each signed in on its own." width="100%">
+  </picture>
+</p>
 
-One ledger for every Claude Code, Codex and Grok account, API key and router. Click an account and a terminal opens already signed in, on the right model, with your shared instructions in place. A tray icon shows each account's 5-hour and weekly limits.
+<p align="center">
+  <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later">
+  <img src="https://img.shields.io/badge/rust-1.89+-orange" alt="Rust 1.89 or later">
+</p>
 
-Works on Linux, macOS and Windows. Not affiliated with Anthropic, OpenAI or xAI.
+<p align="center">
+  <b><a href="#install">Install</a></b> &nbsp;·&nbsp;
+  <b><a href="#usage">Usage</a></b> &nbsp;·&nbsp;
+  <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
+  <a href="docs/safety.md">How it stays safe</a>
+</p>
 
-## How it stays safe
+Versatile Vault keeps one ledger for every Claude Code, Codex and Grok account, API key and router. Click an account and a terminal opens already signed in, on the right model, with your shared instructions in place. A tray icon shows each account's 5-hour and weekly limits.
 
-| Rule | What it means |
-| --- | --- |
-| One home per account | Every account runs with its own `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME`. Credentials are never copied between folders, so a rotating refresh token only ever exists in one place. |
-| The harness owns its tokens | Sign-in, refresh and sign-out are done by `claude`, `codex` and `grok` themselves, inside the account's home. Versatile Vault never stores, copies or refreshes an OAuth token. |
-| One read-only exception | To show Claude limits and the plan name, the access token Claude Code saved is read in memory and sent only to Anthropic's own account endpoints (`api.anthropic.com/api/oauth/usage` and `/profile`). These endpoints are not documented; if they change, limits fall back to what Claude Code reports to its status line. |
-| Keys live in the OS keychain | API keys go to macOS Keychain, Windows Credential Manager or the Secret Service. They are not written to the ledger, to a config file or to a command line. |
-| Keys are resolved late | The terminal runs `vvault run <id>`; the key is read from the keychain there and passed to the harness through its environment only. |
-| Clean environment | Variables that would override an identity (`ANTHROPIC_*`, `CODEX_HOME`, `OPENAI_API_KEY`, …) are removed before the harness starts. |
-| Clear text is refused | A custom endpoint must be `https://`; plain `http://` is accepted only for localhost. |
+## What it is
 
-The ledger (`ledger.json`) holds labels, models and folder paths. It is created readable only by you.
+It runs on your own machine (Linux, macOS and Windows) as a Rust workspace: a core library, the `vvault` command and a Tauri tray app. Every account has its own home folder, so credentials are never copied between folders. Versatile Vault never stores, copies or refreshes an OAuth token: sign-in, refresh and sign-out are done by `claude`, `codex` and `grok` themselves. Not affiliated with Anthropic, OpenAI or xAI.
 
-## Install
+| For | You get | Start with |
+|---|---|---|
+| **People with several AI accounts** | one click per account, limits at a glance, one default account per machine | [Usage](#usage) |
+| **People using other providers** | provider keys in the OS keychain, opened in the tool you use | [Using vvault](docs/usage.md) |
 
-Requires Rust 1.89+ and, for the tray app, the [Tauri 2 system dependencies](https://tauri.app/start/prerequisites/).
+## Documentation
+
+[Using vvault](docs/usage.md) covers the default account, provider keys, shared instructions, limits, models, keep-alive and bars. [How it stays safe](docs/safety.md) lists the rules. Engineering documentation is kept by Versatile outside this repository.
+
+<a id="how-it-works"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-how-dark.svg">
+  <img src="docs/assets/section-how-light.svg" alt="How it works" width="100%">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagram-flow-dark.svg">
+  <img src="docs/assets/diagram-flow-light.svg" alt="How an account is opened. You click an account in the tray app or run vvault. vvault reads the ledger, resolves any API key from the OS keychain at the last moment, and starts the harness (Claude Code, Codex or Grok) in that account's own home folder, so the harness keeps its own tokens." width="100%">
+</picture>
+
+1. You pick an account in the tray app or run `vvault open <account>`.
+2. vvault reads the ledger (labels, models and folder paths) and removes variables that would override the identity.
+3. For an API key, it reads the key from the OS keychain at that moment and passes it through the environment only.
+4. It starts the harness with that account's own home folder.
+
+<a id="install"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-install-dark.svg">
+  <img src="docs/assets/section-install-light.svg" alt="Install it" width="100%">
+</picture>
+
+You need Rust 1.89 or later and, for the tray app, the [Tauri 2 system dependencies](https://tauri.app/start/prerequisites/).
 
 ```sh
+git clone https://github.com/versatile-sh/agents-vault
+cd agents-vault
 cargo install --path crates/cli
 cargo build --release -p vvault-app --features custom-protocol
 ```
 
-Put `vvault-app` next to `vvault` (or keep `vvault` on `PATH`). For installers (`.dmg`, `.msi`, `.deb`, `.AppImage`), run `cargo tauri build` inside `app/src-tauri`.
+Put `vvault-app` next to `vvault`, or keep `vvault` on `PATH`. For installers (`.dmg`, `.msi`, `.deb`, `.AppImage`), run `cargo tauri build` inside `app/src-tauri`. With a fresh ledger, `vvault list` answers:
 
-## Use
+```text
+No accounts yet. Try `vvault add work` or `vvault adopt personal`.
+```
 
-In the app, signing in opens the official page in your browser and finishes by itself; no terminal is involved. From the command line:
+<a id="usage"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-use-dark.svg">
+  <img src="docs/assets/section-use-light.svg" alt="Use an account" width="100%">
+</picture>
+
+In the app, signing in opens the official page in your browser and finishes by itself. From the command line:
 
 ```sh
 vvault add work                       # runs the official Claude Code sign-in
 vvault add team --harness codex       # runs the official Codex sign-in
 vvault add x --harness grok           # runs the official Grok sign-in
-vvault add router --base-url https://openrouter.ai/api --bearer --model vendor/model
-vvault add api --api-key --model claude-sonnet-5-5
 vvault adopt personal                 # track your existing ~/.claude in place
-vvault adopt old --dir ~/some/profile # track any existing home, nothing is copied
 
 vvault list                           # accounts, limits and session state
 vvault open work                      # new terminal window on that account
 vvault run work -- --resume           # same, in the current terminal
-vvault set work --model opus          # model every session starts with
-vvault key router                     # replace a key in the keychain
-vvault remove work                    # the profile folder is kept unless --purge
+vvault default work                   # plain `claude` now means the work account
 ```
 
-### One account for the whole machine
+More: [Using vvault](docs/usage.md).
 
-"Use on this machine" in the app, or `vvault default`, makes plain `claude`, `codex` or `grok` use that account in every new terminal and app.
+## Configuration
 
-```sh
-vvault default work            # plain `claude` now means the work account
-vvault default --clear claude  # back to the harness's own default home
-vvault default                 # show the current defaults
-```
+| Variable | Default | What it does |
+|---|---|---|
+| `VVAULT_HOME` | the platform's data folder | moves the ledger, which keeps experiments away from your real accounts |
 
-It works by pointing the harness at the account's home, so nothing is copied and there is still one copy of the session.
-
-| Where | What is written |
-| --- | --- |
-| `~/.bashrc`, `~/.zshrc`, `~/.config/fish/conf.d/vvault.fish` (only those that exist) | One marked block that runs `vvault env` when a shell starts |
-| Linux: `~/.config/environment.d/60-vvault.conf` | The variable for graphical apps, read at the next login |
-| macOS: `launchctl setenv` | The variable for apps started afterwards |
-| Windows: `setx` | The user variable for programs started afterwards |
-
-Terminals that are already open keep their account until you run `eval "$(vvault env)"` or reopen them. Only signed-in accounts can be the default, because an API key would have to sit in every shell.
-
-### API keys for other providers
-
-A provider key is stored once and opened in whatever tool you use. Presets fill the endpoints for OpenRouter and DeepSeek; any compatible endpoint works with `--anthropic-url` and `--openai-url`.
-
-```sh
-vvault provider add OpenRouter --preset openrouter --model vendor/model-a --model vendor/model-b
-vvault provider add DeepSeek --preset deepseek --model deepseek-chat --command opencode
-vvault provider add Gateway --key-env GATEWAY_API_KEY --openai-url https://gateway.example/v1
-
-vvault use OpenRouter                         # Claude Code on the provider's endpoint, first model
-vvault use OpenRouter --with codex --model vendor/model-b
-vvault use DeepSeek --with shell              # runs the provider's tool, or your shell, with the key exported
-vvault use OpenRouter --window                # same, in a new terminal window
-```
-
-| `--with` | What starts | How the key arrives |
-| --- | --- | --- |
-| `claude` | Claude Code on the Anthropic-compatible endpoint, in a home of its own | `ANTHROPIC_AUTH_TOKEN` |
-| `codex` | Codex on the OpenAI-compatible endpoint, in a home of its own | `VVAULT_API_KEY`, read by a provider defined on the command line |
-| `shell` | The provider's tool command, or your shell | The provider's variable (for example `DEEPSEEK_API_KEY`), plus `OPENAI_*` and `ANTHROPIC_*` for the endpoints it has |
-
-Codex needs an endpoint that speaks the Responses API; not every provider does.
-
-### Shared instructions
-
-Point Versatile Vault at one folder and every managed account links to it: `CLAUDE.md`, `skills`, `commands`, `agents`, `rules` for Claude Code; `AGENTS.md`, `skills`, `prompts` for Codex. `settings.json` / `config.toml` are copied once into new profiles, with credential settings stripped.
-
-```sh
-vvault kit claude --dir ~/.claude
-vvault kit codex --dir ~/.codex
-```
-
-Files you already have inside a profile are never replaced.
-
-### Limits, plan and balance
-
-| Account | Source | Freshness |
-| --- | --- | --- |
-| Claude Code sign-in | Anthropic's account endpoints, plus the `rate_limits` field Claude Code sends to its status line during a session | Right after sign-in, then at most once a minute |
-| Codex sign-in | The Codex CLI's own `account/read` and `account/rateLimits/read` requests | Right after sign-in, then at most once a minute |
-| Grok sign-in | Session state only; the Grok CLI does not report limits | — |
-| OpenRouter and DeepSeek keys | The provider's key or balance request | At most every two minutes |
-| Other API keys | None | — |
-
-On macOS Claude Code keeps its sign-in in the Keychain rather than on disk, so Claude limits there come only from the status line.
-
-Versatile Vault adds its status line through `--settings` at launch, so your `settings.json` is not modified. If you already have a status line, it keeps running and its output is what you see.
-
-### Models
-
-The model field is a list taken from the account itself, with "Other…" for anything not listed.
-
-| Account | Where the list comes from |
-| --- | --- |
-| Claude Code sign-in | The aliases Claude Code documents (`fable`, `opus`, `sonnet`, `haiku`, …) plus the options Claude Code cached for that account |
-| Codex sign-in | The Codex CLI's `model/list` request |
-| Grok | `grok models` |
-| API key or provider | The endpoint's models listing |
-
-```sh
-vvault models work
-vvault models --harness codex
-```
-
-### Keeping sessions alive
-
-The tray app renews idle accounts in the background by asking each harness for its own status. Without the app, schedule the same thing:
-
-```sh
-vvault keepalive        # exit code 1 when an account needs a new sign-in
-```
-
-### Bars and widgets
-
-```sh
-vvault list --json
-vvault waybar           # {"text": "37%", "tooltip": "…", "class": "ok|warning|critical"}
-```
-
-## Layout
-
-| Path | Purpose |
-| --- | --- |
-| `crates/core` | Ledger, launcher, keychain, limits, keep-alive |
-| `crates/cli` | The `vvault` command |
-| `app/src-tauri` | Tray app backend |
-| `app/ui` | Tray app interface (plain HTML, CSS and JS, no build step) |
-| `scripts/icons.py` | Regenerates the icons |
-
-## Development
+## Development and tests
 
 ```sh
 cargo test --workspace
@@ -168,8 +108,17 @@ cargo clippy --workspace --all-targets
 VVAULT_HOME=/tmp/vvault-dev cargo run -p vvault -- list
 ```
 
-`VVAULT_HOME` moves the ledger, which keeps experiments away from your real accounts.
+| Path | Purpose |
+|---|---|
+| `crates/core` | ledger, launcher, keychain, limits, keep-alive |
+| `crates/cli` | the `vvault` command |
+| `app/src-tauri` | tray app backend |
+| `app/ui` | tray app interface (plain HTML, CSS and JS, no build step) |
+
+## Security
+
+API keys live in the OS keychain, never in the ledger, a config file or a command line. To report a vulnerability, contact Versatile at [versatile.sh/contact](https://versatile.sh/contact). The rules are in [How it stays safe](docs/safety.md).
 
 ## License
 
-MIT
+GPL-3.0-or-later. For a commercial licence, contact Versatile at [versatile.sh/contact](https://versatile.sh/contact).
