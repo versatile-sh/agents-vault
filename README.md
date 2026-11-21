@@ -172,4 +172,12 @@ VVAULT_HOME=/tmp/vvault-dev cargo run -p vvault -- list
 
 ## License
 
-MIT
+Copyright (C) 2026 Versatile (versatile.sh)
+
+agents-vault is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE). Third-party components keep their own licences, see [NOTICE](NOTICE).
+
+For a commercial licence without the GPL's obligations, contact Versatile through [versatile.sh/contact](https://versatile.sh/contact).
+
+Contributions are accepted under the CLA, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Versions published before this change were released under the MIT License; copies already received keep those terms.
