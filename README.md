@@ -50,8 +50,8 @@ It runs on your own machine (Linux, macOS and Windows) as a Rust workspace: a co
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagram-flow-dark.svg">
-  <img src="docs/assets/diagram-flow-light.svg" alt="How an account is opened. You click an account in the tray app or run vvault. vvault reads the ledger, resolves any API key from the OS keychain at the last moment, and starts the harness (Claude Code, Codex or Grok) in that account's own home folder, so the harness keeps its own tokens." width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagram-open-dark.svg">
+  <img src="docs/assets/diagram-open-light.svg" alt="How an account is opened. You pick an account in the tray app or run vvault open. vvault reads the ledger, which holds labels, models and folder paths but no secrets. It removes the environment variables that would override the account&#x27;s identity, then reads the API key from the OS keychain at the last moment and starts the harness (Claude Code, Codex or Grok) in that account&#x27;s own home folder." width="100%">
 </picture>
 
 1. You pick an account in the tray app or run `vvault open <account>`.
