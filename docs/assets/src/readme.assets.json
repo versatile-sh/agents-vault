@@ -8,7 +8,14 @@
   "sections": [
     ["how", "overview", "How it ", "works"],
     ["install", "start here", "Install ", "it"],
-    ["use", "start here", "Use ", "an account"]
+    ["use", "start here", "Use ", "an account"],
+    ["what-it-is", "overview", "What it ", "is"],
+    ["documentation", "read", "", "Documentation"],
+    ["configuration", "configure", "", "Configuration"],
+    ["development-and-tests", "develop", "Development and ", "tests"],
+    ["security", "project", "", "Security"],
+    ["contributing", "project", "", "Contributing"],
+    ["license", "project", "", "License"]
   ],
   "diagrams": [
     {
@@ -16,12 +23,42 @@
       "label": "How an account is opened. You click an account in the tray app or run vvault. vvault reads the ledger, resolves any API key from the OS keychain at the last moment, and starts the harness (Claude Code, Codex or Grok) in that account's own home folder, so the harness keeps its own tokens.",
       "gap": 104,
       "cards": [
-        { "title": "You", "sub": "tray app or CLI", "rows": ["click an account", "vvault open work", "vvault list"] },
-        { "title": "vvault", "sub": "ledger and launcher", "weight": 1.2, "rows": ["ledger.json", "clean environment", "limits and plan", ["key read late", "accent"]] },
-        { "title": "Harness", "sub": "own home per account", "rows": ["claude", "codex", "grok"] }
+        {
+          "title": "You",
+          "sub": "tray app or CLI",
+          "rows": ["click an account", "vvault open work", "vvault list"]
+        },
+        {
+          "title": "vvault",
+          "sub": "ledger and launcher",
+          "weight": 1.2,
+          "rows": [
+            "ledger.json",
+            "clean environment",
+            "limits and plan",
+            ["key read late", "accent"]
+          ]
+        },
+        {
+          "title": "Harness",
+          "sub": "own home per account",
+          "rows": ["claude", "codex", "grok"]
+        }
       ],
-      "arrows": [{ "label": "open" }, { "label": "starts", "accent": true }],
-      "footer": { "title": "OS keychain", "sub": "API keys, never on disk", "under": 1 }
+      "arrows": [
+        {
+          "label": "open"
+        },
+        {
+          "label": "starts",
+          "accent": true
+        }
+      ],
+      "footer": {
+        "title": "OS keychain",
+        "sub": "API keys, never on disk",
+        "under": 1
+      }
     }
   ]
 }

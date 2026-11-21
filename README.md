@@ -19,7 +19,12 @@
 
 Versatile Vault keeps one ledger for every Claude Code, Codex and Grok account, API key and router. Click an account and a terminal opens already signed in, on the right model, with your shared instructions in place. A tray icon shows each account's 5-hour and weekly limits.
 
-## What it is
+<a id="what-it-is"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-what-it-is-dark.svg">
+  <img src="docs/assets/section-what-it-is-light.svg" alt="What it is" width="100%">
+</picture>
 
 It runs on your own machine (Linux, macOS and Windows) as a Rust workspace: a core library, the `vvault` command and a Tauri tray app. Every account has its own home folder, so credentials are never copied between folders. Versatile Vault never stores, copies or refreshes an OAuth token: sign-in, refresh and sign-out are done by `claude`, `codex` and `grok` themselves. Not affiliated with Anthropic, OpenAI or xAI.
 
@@ -28,7 +33,12 @@ It runs on your own machine (Linux, macOS and Windows) as a Rust workspace: a co
 | **People with several AI accounts** | one click per account, limits at a glance, one default account per machine | [Usage](#usage) |
 | **People using other providers** | provider keys in the OS keychain, opened in the tool you use | [Using vvault](docs/usage.md) |
 
-## Documentation
+<a id="documentation"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-documentation-dark.svg">
+  <img src="docs/assets/section-documentation-light.svg" alt="Documentation" width="100%">
+</picture>
 
 [Using vvault](docs/usage.md) covers the default account, provider keys, shared instructions, limits, models, keep-alive and bars. [How it stays safe](docs/safety.md) lists the rules. Engineering documentation is kept by Versatile outside this repository.
 
@@ -94,13 +104,23 @@ vvault default work                   # plain `claude` now means the work accoun
 
 More: [Using vvault](docs/usage.md).
 
-## Configuration
+<a id="configuration"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-configuration-dark.svg">
+  <img src="docs/assets/section-configuration-light.svg" alt="Configuration" width="100%">
+</picture>
 
 | Variable | Default | What it does |
 |---|---|---|
 | `VVAULT_HOME` | the platform's data folder | moves the ledger, which keeps experiments away from your real accounts |
 
-## Development and tests
+<a id="development-and-tests"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-development-and-tests-dark.svg">
+  <img src="docs/assets/section-development-and-tests-light.svg" alt="Development and tests" width="100%">
+</picture>
 
 ```sh
 cargo test --workspace
@@ -115,15 +135,30 @@ VVAULT_HOME=/tmp/vvault-dev cargo run -p vvault -- list
 | `app/src-tauri` | tray app backend |
 | `app/ui` | tray app interface (plain HTML, CSS and JS, no build step) |
 
-## Security
+<a id="security"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-security-dark.svg">
+  <img src="docs/assets/section-security-light.svg" alt="Security" width="100%">
+</picture>
 
 API keys live in the OS keychain, never in the ledger, a config file or a command line. To report a vulnerability, contact Versatile at [versatile.sh/contact](https://versatile.sh/contact). The rules are in [How it stays safe](docs/safety.md).
 
-## Contributing
+<a id="contributing"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-contributing-dark.svg">
+  <img src="docs/assets/section-contributing-light.svg" alt="Contributing" width="100%">
+</picture>
 
 See [CONTRIBUTING.md](CONTRIBUTING.md); contributions are accepted under the CLA.
 
-## License
+<a id="license"></a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/section-license-dark.svg">
+  <img src="docs/assets/section-license-light.svg" alt="License" width="100%">
+</picture>
 
 Copyright (C) 2026 Versatile (versatile.sh)
 
