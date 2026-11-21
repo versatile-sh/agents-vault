@@ -123,9 +123,9 @@ More: [Using vvault](docs/usage.md).
 </picture>
 
 ```sh
-cargo test --workspace
-cargo clippy --workspace --all-targets
-VVAULT_HOME=/tmp/vvault-dev cargo run -p vvault -- list
+mise run check            # rustfmt, clippy, tests, Semgrep
+mise run test             # cargo test --workspace
+mise run dev -- list      # the CLI against a throwaway ledger in /tmp/vvault-dev
 ```
 
 | Path | Purpose |
