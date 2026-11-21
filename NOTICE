@@ -1,0 +1,16 @@
+agents-vault
+Copyright (C) 2026 Versatile (versatile.sh)
+
+The Versatile-authored code in this repository is licensed under the GNU
+General Public License, version 3 or (at your option) any later version, see
+LICENSE. Versatile also offers it under a commercial licence.
+
+The third-party material below keeps its own license.
+
+app/ui/fonts
+  Geist (Vercel) and JetBrains Mono (JetBrains), SIL Open Font License 1.1,
+  see app/ui/fonts/NOTICE.md.
+
+Rust crate dependencies (Cargo.lock) are compiled into the binaries; each
+keeps its own license (MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, Unicode-3.0
+and similar permissive or weak-copyleft terms).

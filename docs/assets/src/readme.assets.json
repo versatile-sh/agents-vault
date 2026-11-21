@@ -1,0 +1,27 @@
+{
+  "name": "agents-vault",
+  "pitch": ["One ledger for every ", "AI account", "."],
+  "sub": "Claude Code, Codex and Grok accounts, keys and routers, each signed in on its own.",
+  "badge": "GPL-3.0-or-later",
+  "tags": ["Rust", "CLI and tray app", "Linux, macOS, Windows", "OS keychain"],
+  "heroLabel": "agents-vault: one ledger for every AI account. Claude Code, Codex and Grok accounts, keys and routers, each signed in on its own.",
+  "sections": [
+    ["how", "overview", "How it ", "works"],
+    ["install", "start here", "Install ", "it"],
+    ["use", "start here", "Use ", "an account"]
+  ],
+  "diagrams": [
+    {
+      "slug": "flow",
+      "label": "How an account is opened. You click an account in the tray app or run vvault. vvault reads the ledger, resolves any API key from the OS keychain at the last moment, and starts the harness (Claude Code, Codex or Grok) in that account's own home folder, so the harness keeps its own tokens.",
+      "gap": 104,
+      "cards": [
+        { "title": "You", "sub": "tray app or CLI", "rows": ["click an account", "vvault open work", "vvault list"] },
+        { "title": "vvault", "sub": "ledger and launcher", "weight": 1.2, "rows": ["ledger.json", "clean environment", "limits and plan", ["key read late", "accent"]] },
+        { "title": "Harness", "sub": "own home per account", "rows": ["claude", "codex", "grok"] }
+      ],
+      "arrows": [{ "label": "open" }, { "label": "starts", "accent": true }],
+      "footer": { "title": "OS keychain", "sub": "API keys, never on disk", "under": 1 }
+    }
+  ]
+}
