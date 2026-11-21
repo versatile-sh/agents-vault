@@ -1,27 +1,155 @@
 {
   "name": "agents-vault",
-  "pitch": ["One ledger for every ", "AI account", "."],
+  "pitch": [
+    "One ledger for every ",
+    "AI account",
+    "."
+  ],
   "sub": "Claude Code, Codex and Grok accounts, keys and routers, each signed in on its own.",
   "badge": "GPL-3.0-or-later",
-  "tags": ["Rust", "CLI and tray app", "Linux, macOS, Windows", "OS keychain"],
+  "tags": [
+    "Rust",
+    "CLI and tray app",
+    "Linux, macOS, Windows",
+    "OS keychain"
+  ],
   "heroLabel": "agents-vault: one ledger for every AI account. Claude Code, Codex and Grok accounts, keys and routers, each signed in on its own.",
   "sections": [
-    ["how", "overview", "How it ", "works"],
-    ["install", "start here", "Install ", "it"],
-    ["use", "start here", "Use ", "an account"]
+    [
+      "how",
+      "overview",
+      "How it ",
+      "works"
+    ],
+    [
+      "install",
+      "start here",
+      "Install ",
+      "it"
+    ],
+    [
+      "use",
+      "start here",
+      "Use ",
+      "an account"
+    ],
+    [
+      "what-it-is",
+      "overview",
+      "What it ",
+      "is"
+    ],
+    [
+      "documentation",
+      "read",
+      "",
+      "Documentation"
+    ],
+    [
+      "configuration",
+      "configure",
+      "",
+      "Configuration"
+    ],
+    [
+      "development-and-tests",
+      "develop",
+      "Development and ",
+      "tests"
+    ],
+    [
+      "security",
+      "project",
+      "",
+      "Security"
+    ],
+    [
+      "contributing",
+      "project",
+      "",
+      "Contributing"
+    ],
+    [
+      "license",
+      "project",
+      "",
+      "License"
+    ]
   ],
   "diagrams": [
     {
-      "slug": "flow",
-      "label": "How an account is opened. You click an account in the tray app or run vvault. vvault reads the ledger, resolves any API key from the OS keychain at the last moment, and starts the harness (Claude Code, Codex or Grok) in that account's own home folder, so the harness keeps its own tokens.",
-      "gap": 104,
+      "slug": "open",
+      "kind": "pipeline",
+      "why": "Opening an account is a fixed chain of steps, and each step is one of the safety rules (no secret in the ledger, identity variables removed, key read last), so a pipeline shows the rules in order.",
+      "label": "How an account is opened. You pick an account in the tray app or run vvault open. vvault reads the ledger, which holds labels, models and folder paths but no secrets. It removes the environment variables that would override the account's identity, then reads the API key from the OS keychain at the last moment and starts the harness (Claude Code, Codex or Grok) in that account's own home folder.",
+      "gap": 56,
       "cards": [
-        { "title": "You", "sub": "tray app or CLI", "rows": ["click an account", "vvault open work", "vvault list"] },
-        { "title": "vvault", "sub": "ledger and launcher", "weight": 1.2, "rows": ["ledger.json", "clean environment", "limits and plan", ["key read late", "accent"]] },
-        { "title": "Harness", "sub": "own home per account", "rows": ["claude", "codex", "grok"] }
+        {
+          "title": "pick",
+          "sub": "tray or CLI",
+          "rows": [
+            "click an account",
+            "vvault open",
+            [
+              "vvault list",
+              "muted"
+            ]
+          ]
+        },
+        {
+          "title": "read ledger",
+          "sub": "ledger.json",
+          "rows": [
+            "labels, models",
+            "folder paths",
+            [
+              "no secrets",
+              "accent"
+            ]
+          ]
+        },
+        {
+          "title": "clean env",
+          "sub": "before launch",
+          "rows": [
+            "identity vars",
+            "removed",
+            [
+              "no override",
+              "muted"
+            ]
+          ]
+        },
+        {
+          "title": "start",
+          "sub": "own home folder",
+          "rows": [
+            [
+              "key read last",
+              "accent"
+            ],
+            "claude",
+            "codex, grok"
+          ]
+        }
       ],
-      "arrows": [{ "label": "open" }, { "label": "starts", "accent": true }],
-      "footer": { "title": "OS keychain", "sub": "API keys, never on disk", "under": 1 }
+      "arrows": [
+        {
+          "label": ""
+        },
+        {
+          "label": ""
+        },
+        {
+          "label": ""
+        }
+      ],
+      "footer": {
+        "title": "keychain",
+        "sub": "OS, API keys",
+        "under": 3,
+        "label": "just in time"
+      }
     }
   ]
 }
